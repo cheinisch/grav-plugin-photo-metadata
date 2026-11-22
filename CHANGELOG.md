@@ -1,3 +1,7 @@
+# 0.2.5
+
+- Seitenliste über den Seitenbaum laden, Detail rechts, Fehler sichtbar
+
 # 0.2.4
 
 - Admin2-Layout für die Foto-Metadaten-Seite übernehmen
