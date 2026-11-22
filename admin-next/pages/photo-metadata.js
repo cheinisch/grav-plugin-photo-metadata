@@ -59,6 +59,7 @@ const STYLE = `
   .item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: 0;
     color: inherit; padding: 6px 8px; border-radius: var(--radius-sm, 6px); cursor: pointer; font: inherit; }
   .item:hover { background: var(--muted, #f4f4f5); }
+  .item.dim .t { opacity: .6; }
   .item.sel { background: var(--primary, #3c83f6); color: var(--primary-foreground, #fff); }
   .item .ico { display: inline-flex; opacity: .7; flex: 0 0 auto; }
   .item .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
@@ -153,6 +154,7 @@ class PhotoMetadataPage extends HTMLElement {
       route: p.route,
       title: p.title || p.route,
       hasChildren: !!p.has_children,
+      ancestorOnly: !!p.ancestor_only,   // Ordner ohne eigene Seite (nur zum Öffnen)
       children: null,   // null = noch nicht geladen
       loading: false,
       error: null,
@@ -240,9 +242,10 @@ class PhotoMetadataPage extends HTMLElement {
 
     const itemHtml = (n, level, onPath) => {
       const sel = onPath ? ' sel' : '';
+      const dim = n.ancestorOnly ? ' dim' : '';
       const chev = n.hasChildren ? `<span class="chev">${ICON_CHEV}</span>` : '';
       const icon = n.hasChildren ? ICON_FOLDER : ICON_FILE;
-      return `<button class="item${sel}" data-route="${esc(n.route)}" data-level="${level}" title="${esc(n.route)}">
+      return `<button class="item${sel}${dim}" data-route="${esc(n.route)}" data-level="${level}" title="${esc(n.route)}">
         <span class="ico">${icon}</span><span class="t">${esc(n.title)}</span>${chev}</button>`;
     };
 
@@ -279,6 +282,7 @@ class PhotoMetadataPage extends HTMLElement {
 
   async selectPage(route) {
     const token = ++this.loadToken;
+    const node = this.state.nodes.get(route);
     this.state.route = route;
     this.state.file = null;
     this.state.meta = null;
@@ -286,6 +290,10 @@ class PhotoMetadataPage extends HTMLElement {
     this.renderCrumbs();
     this.shadowRoot.querySelector('[data-side]').innerHTML = '<div class="empty">Ein Bild wählen, um die Metadaten zu bearbeiten.</div>';
     const box = this.shadowRoot.querySelector('[data-images]');
+    if (node && node.ancestorOnly) {
+      box.innerHTML = '<div class="empty">Dieser Ordner hat keine eigene Seite. Wähle eine Unterseite.</div>';
+      return;
+    }
     box.innerHTML = '<div class="empty">Lade Bilder…</div>';
     try {
       const images = await api('/photo-metadata/images?route=' + encodeURIComponent(route));
