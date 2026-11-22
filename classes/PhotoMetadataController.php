@@ -31,21 +31,30 @@ class PhotoMetadataController extends AbstractApiController
         $pages = $this->grav['pages'];
         $items = [];
 
-        // Seitenbaum rekursiv durchlaufen: zuverlässiger als all(), dessen Schlüssel keine Routen sein müssen.
-        $collect = function ($page) use (&$collect, &$items): void {
-            $count = count($page->media()->images());
-            if ($count > 0) {
-                $items[$page->route()] = [
-                    'route'  => $page->route(),
-                    'title'  => $page->title(),
-                    'images' => $count,
-                ];
+        // Alle Seiten aus all() (flach, Tiefe zuerst). Root() wirft in diesem Kontext
+        // „Internal error“. Eintrag auflösen: als Seite, sonst über Route oder Schlüssel.
+        $resolve = static function ($value) use ($pages): ?\Grav\Common\Page\Interfaces\PageInterface {
+            if ($value instanceof \Grav\Common\Page\Interfaces\PageInterface) {
+                return $value;
             }
-            foreach ($page->children() as $child) {
-                $collect($child);
-            }
+            return is_string($value) || is_int($value) ? $pages->find((string) $value) : null;
         };
-        $collect($pages->root());
+
+        foreach ($pages->all() as $key => $item) {
+            $page = $resolve($item) ?? $resolve($key);
+            if (!$page) {
+                continue;
+            }
+            $count = count($page->media()->images());
+            if ($count === 0) {
+                continue;
+            }
+            $items[$page->route()] = [
+                'route'  => $page->route(),
+                'title'  => $page->title(),
+                'images' => $count,
+            ];
+        }
 
         // Elternseiten ohne eigene Bilder ergänzen, damit der Baum nicht auseinanderfällt.
         foreach (array_keys($items) as $route) {
