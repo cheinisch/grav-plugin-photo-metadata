@@ -22,7 +22,7 @@
     {% endif %}
 
     {% for item in photo_metadata_items %}
-    <fieldset style="margin-bottom: 1.5rem;">
+    <fieldset id="pm-{{ item.name }}" style="margin-bottom: 1.5rem;">
         <legend>{{ item.name }}</legend>
         <img src="{{ item.url }}" alt="" style="max-width: 160px; height: auto;">
 

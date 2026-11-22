@@ -31,7 +31,55 @@ class PhotoMetadataPlugin extends Plugin
             'onAdminTwigTemplatePaths'   => ['onAdminTwigTemplatePaths', 0],
             'onAdminPage'                => ['onAdminPage', 0],
             'onAdminTaskExecute'         => ['onAdminTaskExecute', 0],
+            'onAssetsInitialized'        => ['onAssetsInitialized', 0],
         ];
+    }
+
+    /**
+     * Ergänzt im Admin auf der Seiten-Bearbeitung jede Medienkarte um einen Button,
+     * der die Metadaten dieses Bildes im Batch-Editor öffnet.
+     */
+    public function onAssetsInitialized(): void
+    {
+        if (!$this->isAdmin()) {
+            return;
+        }
+
+        $this->grav['assets']->addInlineJs($this->buttonScript());
+    }
+
+    private function buttonScript(): string
+    {
+        $title = 'Foto-Metadaten öffnen';
+        $editorRoute = self::ADMIN_ROUTE;
+
+        return <<<JS
+(function () {
+    var match = location.pathname.match(/^(.*)\/pages(\/.*)$/);
+    if (!match) { return; }
+    var editorUrl = match[1] + '/{$editorRoute}';
+    var route = match[2];
+
+    function addButtons() {
+        document.querySelectorAll('.dz-preview').forEach(function (card) {
+            if (card.querySelector('.dz-photo-metadata')) { return; }
+            var anchor = card.querySelector('a.dz-metadata');
+            var name = card.querySelector('[data-dz-name]');
+            if (!anchor || !name) { return; }
+
+            var link = document.createElement('a');
+            link.className = 'dz-photo-metadata';
+            link.title = '{$title}';
+            link.href = editorUrl + '?page=' + encodeURIComponent(route) + '#pm-' + encodeURIComponent(name.textContent.trim());
+            link.innerHTML = '<i class="fa fa-camera"></i>';
+            anchor.insertAdjacentElement('afterend', link);
+        });
+    }
+
+    new MutationObserver(addButtons).observe(document.body, { childList: true, subtree: true });
+    addButtons();
+})();
+JS;
     }
 
     public function onTwigSiteVariables(): void
