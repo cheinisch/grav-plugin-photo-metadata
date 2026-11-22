@@ -1,0 +1,98 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Versionssprung (patch, minor oder major)'
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Version erhöhen
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          CUR=$(sed -n 's/^version: //p' blueprints.yaml | tr -d "\"' ")
+          NEW=$(python3 - "$CUR" "$BUMP" <<'PY'
+          import sys
+          major, minor, patch = map(int, sys.argv[1].split('.'))
+          bump = sys.argv[2]
+          if bump == 'major':
+              major, minor, patch = major + 1, 0, 0
+          elif bump == 'minor':
+              minor, patch = minor + 1, 0
+          else:
+              patch += 1
+          print(f"{major}.{minor}.{patch}")
+          PY
+          )
+          sed -i "s/^version: .*/version: ${NEW}/" blueprints.yaml
+          echo "NEW_VERSION=${NEW}" >> "$GITHUB_ENV"
+
+      - name: Changelog aus Commits erzeugen
+        run: |
+          if grep -q "^# ${NEW_VERSION}\$" CHANGELOG.md; then
+            echo "Eintrag für ${NEW_VERSION} ist bereits vorhanden."
+          else
+            PREV=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+            if [ -n "$PREV" ]; then RANGE="${PREV}..HEAD"; else RANGE="HEAD"; fi
+            ENTRIES=$(git log "$RANGE" --no-merges --pretty=format:'- %s' | grep -v '^- Release v' || true)
+            if [ -z "$ENTRIES" ]; then ENTRIES="- Keine inhaltlichen Änderungen"; fi
+            {
+              echo "# ${NEW_VERSION}"
+              echo
+              echo "$ENTRIES"
+              echo
+              cat CHANGELOG.md
+            } > CHANGELOG.new && mv CHANGELOG.new CHANGELOG.md
+            echo "Neuer Eintrag aus ${RANGE}:"
+          fi
+          awk -v v="$NEW_VERSION" '
+            /^# /{ if (found) exit; if ($2 == v) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          sed -i '/./,$!d' release-notes.md
+          cat release-notes.md
+
+      - name: Commit, Tag und Push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add blueprints.yaml CHANGELOG.md
+          git commit -m "Release v${NEW_VERSION}"
+          git tag "v${NEW_VERSION}"
+          git push origin HEAD:"${GITHUB_REF_NAME}"
+          git push origin "v${NEW_VERSION}"
+
+      - name: Grav-Paket bauen
+        run: |
+          PKG="photo-metadata"
+          rm -rf dist && mkdir -p "dist/$PKG"
+          cp photo-metadata.php photo-metadata.yaml blueprints.yaml README.md CHANGELOG.md LICENSE "dist/$PKG/"
+          (cd dist && zip -qr "../${PKG}-${NEW_VERSION}.zip" "$PKG")
+          unzip -l "${PKG}-${NEW_VERSION}.zip"
+
+      - name: Release mit Zip erstellen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${NEW_VERSION}" "photo-metadata-${NEW_VERSION}.zip" \
+            --title "v${NEW_VERSION}" \
+            --notes-file release-notes.md
