@@ -4,19 +4,17 @@ Bildmetadaten direkt im Admin bearbeiten und die Anzeige von EXIF- und GPS-Daten
 
 ## Status
 
-Frühe Version 0.1.1. Das Plugin stellt die Einstellungen bereit, auch pro Seite überschreibbar. Der Batch-Editor im Admin bearbeitet Titel, Beschreibung, Alt-Text, Schlagwörter und Autor. Der Editor ist noch nicht im Browser getestet.
+Version für Grav 2 mit Admin2. Der klassische Admin wird nicht unterstützt.
 
-## Foto-Metadaten im Admin
+## Voraussetzungen
 
-Im Admin gibt es den Menüpunkt „Foto-Metadaten“. Dort gibst du die Route einer Seite an (z. B. `/fotos/album-1`). Es werden alle Bilder dieser Seite mit einem Formular pro Bild angezeigt. Beim Speichern entstehen die Sidecars:
-
-- Dateiname: `<bild>.<ext>.meta.yaml` neben dem Bild, z. B. `foto.jpg.meta.yaml`. Grav liest diese Dateien automatisch.
-- Geschrieben werden nur die Felder `title`, `description`, `alt`, `keywords` und `author`. Andere Schlüssel in der Datei bleiben erhalten.
-- Ein leeres Feld entfernt den Schlüssel. Ist danach nichts mehr übrig, wird die Datei gelöscht.
+- Grav `>= 2.0.0`
+- API-Plugin `>= 1.0.0`
+- Admin2 `>= 1.0.0`
 
 ## Geplante Funktionen
 
-- Bearbeitung weiterer `meta.yaml`-Felder und der EXIF-Felder.
+- EXIF-Werte im Admin2 bearbeiten. Die Werte werden als Überschreibung in der `.meta.yaml` neben dem Bild gespeichert, die Bilddatei bleibt unverändert.
 
 ## Einstellungen
 
