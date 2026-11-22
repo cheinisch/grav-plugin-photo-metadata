@@ -1,4 +1,4 @@
-// Admin2-Seite „Foto-Metadaten“: Seiten durchsuchen, Bilder zeigen, Sidecar-YAML bearbeiten.
+// Admin2-Seite „Foto-Metadaten“: Seiten als Baum durchsuchen, Bilder zeigen, Sidecar-YAML bearbeiten.
 // Die API liegt unter window.__GRAV_API_SERVER_URL + window.__GRAV_API_PREFIX,
 // das Token steht in window.__GRAV_API_TOKEN (von Admin2 gesetzt).
 const TAG = window.__GRAV_PAGE_TAG || 'grav-photo-metadata-page';
@@ -19,15 +19,21 @@ async function api(path, opts = {}) {
 
 const STYLE = `
   :host { display: block; font: 14px/1.4 system-ui, sans-serif; color: inherit; }
-  .grid { display: grid; grid-template-columns: 260px 1fr 380px; gap: 16px; min-height: 70vh; }
+  .grid { display: grid; grid-template-columns: 300px 1fr 380px; gap: 16px; min-height: 70vh; }
   .col { border: 1px solid rgba(127,127,127,.3); border-radius: 8px; padding: 12px; overflow: auto; }
   h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; opacity: .7; }
   input[type=search], textarea { width: 100%; box-sizing: border-box; background: transparent; color: inherit;
     border: 1px solid rgba(127,127,127,.4); border-radius: 6px; padding: 6px; font: inherit; }
   textarea { min-height: 360px; font-family: ui-monospace, monospace; font-size: 12px; }
-  .item { display: block; width: 100%; text-align: left; background: none; border: 0; color: inherit;
-    padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+  .row { display: flex; align-items: center; gap: 2px; }
+  .tog { background: none; border: 0; color: inherit; cursor: pointer; width: 20px; padding: 0; opacity: .7; }
+  .tog.none { visibility: hidden; }
+  .item { flex: 1; min-width: 0; text-align: left; background: none; border: 0; color: inherit;
+    padding: 4px 6px; border-radius: 6px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .item:hover, .item.sel { background: rgba(127,127,127,.2); }
+  .item.dim { opacity: .55; }
+  .kids { margin-left: 10px; padding-left: 8px; border-left: 1px solid rgba(127,127,127,.25); }
+  .kids.hidden { display: none; }
   .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
   .thumb { background: none; border: 2px solid transparent; border-radius: 6px; padding: 4px; color: inherit; cursor: pointer; }
   .thumb.sel { border-color: #7c5cff; }
@@ -42,7 +48,7 @@ class PhotoMetadataPage extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this.state = { pages: [], filter: '', route: null, images: [], file: null, draft: '', msg: '', err: false };
+    this.state = { pages: [], filter: '', route: null, images: [], file: null, draft: '', meta: null, msg: '', err: false };
   }
 
   connectedCallback() {
@@ -54,22 +60,29 @@ class PhotoMetadataPage extends HTMLElement {
         <div class="col"><h3>Metadaten (YAML)</h3><div data-editor class="muted">Ein Bild wählen.</div><div class="msg" data-msg></div></div>
       </div>`;
 
-    this.shadowRoot.querySelector('[data-filter]').addEventListener('input', (e) => {
+    const root = this.shadowRoot;
+    root.querySelector('[data-filter]').addEventListener('input', (e) => {
       this.state.filter = e.target.value.toLowerCase();
       this.renderPages();
     });
-    this.shadowRoot.querySelector('[data-pages]').addEventListener('click', (e) => {
+    root.querySelector('[data-pages]').addEventListener('click', (e) => {
+      const tog = e.target.closest('[data-toggle]');
+      if (tog) {
+        tog.closest('.node').querySelector('.kids')?.classList.toggle('hidden');
+        tog.textContent = tog.textContent === '▾' ? '▸' : '▾';
+        return;
+      }
       const b = e.target.closest('[data-route]');
       if (b) this.selectPage(b.dataset.route);
     });
-    this.shadowRoot.querySelector('[data-images]').addEventListener('click', (e) => {
+    root.querySelector('[data-images]').addEventListener('click', (e) => {
       const b = e.target.closest('[data-file]');
       if (b) this.selectImage(b.dataset.file);
     });
-    this.shadowRoot.querySelector('[data-editor]').addEventListener('input', (e) => {
+    root.querySelector('[data-editor]').addEventListener('input', (e) => {
       if (e.target.matches('textarea')) this.state.draft = e.target.value;
     });
-    this.shadowRoot.querySelector('[data-editor]').addEventListener('click', (e) => {
+    root.querySelector('[data-editor]').addEventListener('click', (e) => {
       if (e.target.matches('[data-save]')) this.save();
     });
 
@@ -85,13 +98,43 @@ class PhotoMetadataPage extends HTMLElement {
     }
   }
 
+  /** Baut aus der flachen Liste (Routen) einen Baum über die Pfad-Segmente. */
+  buildTree(list) {
+    const nodes = new Map();
+    list.forEach((p) => nodes.set(p.route, { ...p, children: [] }));
+    const roots = [];
+    nodes.forEach((n) => {
+      const parts = n.route.split('/').filter(Boolean);
+      const parent = parts.length > 1 ? nodes.get('/' + parts.slice(0, -1).join('/')) : null;
+      (parent ? parent.children : roots).push(n);
+    });
+    return roots;
+  }
+
+  /** Gibt HTML für einen Knoten zurück, leer wenn weder er noch ein Kind zum Filter passt. */
+  renderNode(n, q) {
+    const kids = n.children.map((c) => this.renderNode(c, q)).join('');
+    const selfMatch = !q || n.title.toLowerCase().includes(q) || n.route.toLowerCase().includes(q);
+    if (!selfMatch && !kids) return '';
+
+    const sel = n.route === this.state.route ? ' sel' : '';
+    const dim = n.images ? '' : ' dim';
+    const count = n.images ? ` <span class="muted">(${n.images})</span>` : '';
+    const tog = n.children.length
+      ? `<button class="tog" data-toggle title="Aufklappen">▾</button>`
+      : `<button class="tog none" tabindex="-1">▾</button>`;
+    return `<div class="node">
+      <div class="row">${tog}<button class="item${sel}${dim}" data-route="${esc(n.route)}" title="${esc(n.route)}">${esc(n.title)}${count}</button></div>
+      ${kids ? `<div class="kids">${kids}</div>` : ''}
+    </div>`;
+  }
+
   renderPages() {
     const q = this.state.filter;
-    const list = this.state.pages.filter((p) => !q || p.route.toLowerCase().includes(q) || String(p.title).toLowerCase().includes(q));
-    this.shadowRoot.querySelector('[data-pages]').innerHTML = list.length
-      ? list.map((p) => `<button class="item ${p.route === this.state.route ? 'sel' : ''}" data-route="${esc(p.route)}">
-          ${esc(p.title)} <span class="muted">(${p.images})</span><br><span class="muted">${esc(p.route)}</span></button>`).join('')
-      : '<p class="muted">Keine Seiten mit Bildern gefunden.</p>';
+    const tree = this.buildTree(this.state.pages);
+    const html = tree.map((n) => this.renderNode(n, q)).join('');
+    this.shadowRoot.querySelector('[data-pages]').innerHTML = html
+      || '<p class="muted">Keine Seiten mit Bildern gefunden.</p>';
   }
 
   async selectPage(route) {

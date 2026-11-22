@@ -20,7 +20,10 @@ use Symfony\Component\Yaml\Yaml;
  */
 class PhotoMetadataController extends AbstractApiController
 {
-    /** GET /photo-metadata/pages — Seiten, die Bilder enthalten. */
+    /**
+     * GET /photo-metadata/pages — Seiten mit Bildern, dazu ihre Elternseiten,
+     * damit sich der Baum im Admin zusammenhängend zeichnen lässt.
+     */
     public function pages(ServerRequestInterface $request): ResponseInterface
     {
         $this->requirePermission($request, 'api.media.read');
@@ -36,16 +39,33 @@ class PhotoMetadataController extends AbstractApiController
             if ($count === 0) {
                 continue;
             }
-            $items[] = [
+            $items[$page->route()] = [
                 'route'  => $page->route(),
                 'title'  => $page->title(),
                 'images' => $count,
             ];
         }
 
-        usort($items, static fn(array $a, array $b): int => strcmp($a['route'], $b['route']));
+        // Elternseiten ohne eigene Bilder ergänzen, damit der Baum nicht auseinanderfällt.
+        foreach (array_keys($items) as $route) {
+            $parts = explode('/', trim((string) $route, '/'));
+            for ($i = count($parts) - 1; $i >= 1; $i--) {
+                $ancestor = '/' . implode('/', array_slice($parts, 0, $i));
+                if (isset($items[$ancestor])) {
+                    continue;
+                }
+                $parent = $pages->find($ancestor);
+                $items[$ancestor] = [
+                    'route'  => $ancestor,
+                    'title'  => $parent ? $parent->title() : basename($ancestor),
+                    'images' => 0,
+                ];
+            }
+        }
 
-        return ApiResponse::create($items);
+        ksort($items);
+
+        return ApiResponse::create(array_values($items));
     }
 
     /** GET /photo-metadata/images?route=/alben/aviation — Bilder einer Seite. */
