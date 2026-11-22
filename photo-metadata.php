@@ -55,7 +55,7 @@ class PhotoMetadataPlugin extends Plugin
 
         return <<<JS
 (function () {
-    var match = location.pathname.match(/^(.*)\/pages(\/.*)$/);
+    var match = location.pathname.match(/^(.*)\/pages(?:\/edit)?(\/.*)$/);
     if (!match) { return; }
     var editorUrl = match[1] + '/{$editorRoute}';
     var route = match[2];
