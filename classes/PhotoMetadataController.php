@@ -79,7 +79,7 @@ class PhotoMetadataController extends AbstractApiController
     private function resolvePage(ServerRequestInterface $request, ?string $route = null): \Grav\Common\Page\Interfaces\PageInterface
     {
         $route ??= (string) ($request->getQueryParams()['route'] ?? '');
-        $page = $route !== '' ? $this->grav['pages']->find($route) : null;
+        $page = $route !== '' ? $this->grav['pages']->find($route, true) : null;
         if (!$page) {
             throw new NotFoundException('Seite nicht gefunden.');
         }
