@@ -104,8 +104,8 @@ const STYLE = `
   details.raw { margin-top: 16px; }
   details.raw summary { cursor: pointer; color: var(--muted-foreground, #71717a); font-size: 12px; }
   .dlg { border: 1px solid var(--border, #e4e4e7); border-radius: var(--radius, .5rem); background: var(--card, #fff);
-    color: var(--card-foreground, var(--foreground, #09090b)); padding: 0; width: min(960px, 94vw); max-height: 90vh; }
-  .dlg::backdrop { background: rgba(0, 0, 0, .55); }
+    color: var(--card-foreground, var(--foreground, #09090b)); padding: 0; width: min(960px, 94vw); max-height: 90vh; overflow: auto; box-sizing: border-box; }
+  .ov { position: fixed; inset: 0; background: rgba(0, 0, 0, .55); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 16px; box-sizing: border-box; }
   .dlg form { padding: 18px; display: flex; flex-direction: column; gap: 12px; margin: 0; }
   .dlg h2 { margin: 0; font-size: 16px; font-weight: 600; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
@@ -234,7 +234,10 @@ class PhotoMetadataPage extends HTMLElement {
       if (e.target.matches('textarea')) this.state.draft = e.target.value;
     });
     root.querySelector('[data-side]').addEventListener('click', (e) => {
-      if (e.target.closest('[data-form]')) return this.openForm();
+      if (e.target.closest('[data-form]')) {
+        try { this.openForm(); } catch (err) { this.flash('Formular konnte nicht geöffnet werden: ' + err.message, true); }
+        return;
+      }
       if (e.target.matches('[data-save]')) this.save();
     });
 
@@ -438,8 +441,7 @@ class PhotoMetadataPage extends HTMLElement {
       <div class="head">
         <div style="min-width:0"><h2>${esc(page ? page.title : meta.file)}</h2><div class="sub">${esc(meta.route)}</div></div>
         <div style="display:flex;gap:6px;flex:0 0 auto">
-          <button class="btn" data-form>Metadaten bearbeiten</button>
-          <a class="btn primary" href="${esc(editUrl)}" target="_top">Seite bearbeiten</a>
+          <button class="btn primary" data-form>Metadaten bearbeiten</button>
         </div>
       </div>
       <div class="label">Bild</div>
@@ -494,7 +496,7 @@ class PhotoMetadataPage extends HTMLElement {
     const d = this.shadowRoot.querySelector('[data-dialog]');
     if (d) d.remove();
     this.shadowRoot.insertAdjacentHTML('beforeend', `
-      <dialog class="dlg" data-dialog>
+      <div class="ov" data-dialog><div class="dlg">
         <form data-form-el>
           <div class="dhead">
             <div><h2>${esc(meta.file)}</h2><div class="sub">Datei-Details und Metadaten</div></div>
@@ -536,14 +538,13 @@ class PhotoMetadataPage extends HTMLElement {
             <button type="button" class="btn primary" data-dsave>Speichern</button>
           </div>
         </form>
-      </dialog>`);
+      </div></div>`);
     const dlg = this.shadowRoot.querySelector('[data-dialog]');
-    dlg.querySelector('[data-cancel]').addEventListener('click', () => dlg.close());
+    dlg.querySelector('[data-cancel]').addEventListener('click', () => dlg.remove());
     dlg.querySelector('[data-dsave]').addEventListener('click', () => this.saveForm(dlg));
     dlg.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => {
       navigator.clipboard?.writeText(b.dataset.copy).then(() => this.flash('Kopiert.', false), () => this.flash('Kopieren nicht möglich.', true));
     }));
-    dlg.showModal();
   }
 
   async saveForm(dlg) {
@@ -578,7 +579,7 @@ class PhotoMetadataPage extends HTMLElement {
       const meta = await this.putMeta(yaml);
       this.state.meta = meta;
       this.state.draft = meta.yaml;
-      dlg.close();
+      dlg.remove();
       this.renderSide();
       this.flash('Gespeichert.', false);
     } catch (e) {
