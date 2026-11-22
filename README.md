@@ -12,9 +12,18 @@ Version für Grav 2 mit Admin2. Der klassische Admin wird nicht unterstützt.
 - API-Plugin `>= 1.0.0`
 - Admin2 `>= 1.0.0`
 
+## Admin2-Seite „Foto-Metadaten“
+
+Im Admin2 gibt es in der Sidebar den Punkt **Foto-Metadaten**. Er listet alle Seiten mit Bildern. Nach Auswahl einer Seite siehst du ihre Bilder und kannst die Sidecar-YAML jedes Bildes bearbeiten.
+
+- Die YAML liegt als `<bild>.<ext>.meta.yaml` neben dem Bild. Beim Speichern prüft der Server, dass es gültiges YAML mit Schlüsseln ist.
+- Ein leeres Dokument löscht die Sidecar-Datei.
+- Geschrieben wird nur für Bilder, die zur gewählten Seite gehören.
+- Die API hat vier Endpunkte unter `/photo-metadata/…`: `pages`, `images`, `meta` (GET und PUT). Rechte: `api.media.read` zum Lesen, `api.media.write` zum Schreiben.
+
 ## Geplante Funktionen
 
-- EXIF-Werte im Admin2 bearbeiten. Die Werte werden als Überschreibung in der `.meta.yaml` neben dem Bild gespeichert, die Bilddatei bleibt unverändert.
+- Eigene Eingabefelder für EXIF-Werte. Bisher bearbeitest du alles im YAML-Editor, die Bilddatei bleibt unverändert.
 
 ## Einstellungen
 
