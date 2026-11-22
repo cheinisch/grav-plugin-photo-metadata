@@ -78,6 +78,10 @@ class PhotoMetadataController extends AbstractApiController
 
     private function resolvePage(ServerRequestInterface $request, ?string $route = null): \Grav\Common\Page\Interfaces\PageInterface
     {
+        // Die API schaltet die Seitenverarbeitung für API-Anfragen ab (disablePages), dann ist der
+        // Seitenindex leer und find() liefert immer null. Wie der API-Seitencontroller einschalten.
+        $this->grav['pages']->enablePages();
+
         $route ??= (string) ($request->getQueryParams()['route'] ?? '');
         $page = $route !== '' ? $this->grav['pages']->find($route, true) : null;
         if (!$page) {
