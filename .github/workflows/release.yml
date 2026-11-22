@@ -86,6 +86,16 @@ jobs:
           PKG="photo-metadata"
           rm -rf dist && mkdir -p "dist/$PKG"
           cp photo-metadata.php photo-metadata.yaml blueprints.yaml README.md CHANGELOG.md LICENSE "dist/$PKG/"
+          # Laufzeit-Ordner mitnehmen (PHP-Klassen, Admin2-Seite, CSS, Sprachen). Entwickler-Dateien bleiben draußen.
+          for d in classes admin-next css languages; do
+            [ -d "$d" ] && cp -r "$d" "dist/$PKG/"
+          done
+          # Prüfen: jede per require_once geladene Datei muss im Paket liegen.
+          missing=0
+          while IFS= read -r rel; do
+            if [ ! -f "dist/$PKG/$rel" ]; then echo "FEHLT im Paket: $rel"; missing=1; fi
+          done < <(grep -rhoE "__DIR__ \. '[^']+'" --include='*.php' . | sed -E "s/__DIR__ \. '([^']+)'/\1/" | sed 's#^/##' | sort -u)
+          [ "$missing" -eq 0 ] || exit 1
           (cd dist && zip -qr "../${PKG}-${NEW_VERSION}.zip" "$PKG")
           unzip -l "${PKG}-${NEW_VERSION}.zip"
 
