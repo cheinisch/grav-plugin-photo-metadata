@@ -82,8 +82,17 @@ class PhotoMetadataPlugin extends Plugin
         });
     }
 
-    new MutationObserver(addButtons).observe(document.body, { childList: true, subtree: true });
-    addButtons();
+    function start() {
+        new MutationObserver(addButtons).observe(document.documentElement, { childList: true, subtree: true });
+        addButtons();
+    }
+
+    // Das Skript kann im <head> stehen, dann gibt es noch keinen body.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start);
+    } else {
+        start();
+    }
 })();
 JS;
     }
