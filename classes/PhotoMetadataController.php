@@ -81,9 +81,65 @@ class PhotoMetadataController extends AbstractApiController
         $route ??= (string) ($request->getQueryParams()['route'] ?? '');
         $page = $route !== '' ? $this->grav['pages']->find($route, true) : null;
         if (!$page) {
+            $this->logPageNotFound($route);
             throw new NotFoundException('Seite nicht gefunden: ' . ($route !== '' ? $route : '(leer)'));
         }
         return $page;
+    }
+
+    /**
+     * Schreibt eine Diagnose ins Grav-Log (Warnung, Kanal „grav“), wenn eine Seite nicht
+     * aufgelöst werden kann: Ergebnisse von find(), Elternseite mit Kindern, Ordner auf der Festplatte.
+     */
+    private function logPageNotFound(string $route): void
+    {
+        try {
+            $pages = $this->grav['pages'];
+            $parts = explode('/', trim($route, '/'));
+            $lines = ['route=' . $route, 'parts=' . implode(' > ', $parts)];
+
+            $found = $pages->find($route, true);
+            $lines[] = 'find(route,true)=' . ($found ? 'Treffer:' . $found->route() : 'null');
+            $found = $pages->find($route);
+            $lines[] = 'find(route)=' . ($found ? 'Treffer' : 'null');
+
+            $parentRoute = '/' . implode('/', array_slice($parts, 0, -1));
+            $parent = $pages->find($parentRoute, true);
+            $lines[] = 'parent=' . $parentRoute . ' ' . ($parent ? 'gefunden' : 'nicht gefunden');
+            if ($parent) {
+                $kids = [];
+                foreach ($parent->children() as $child) {
+                    $kids[] = $child->route();
+                }
+                $lines[] = 'kinder-des-parent=[' . implode(', ', $kids) . ']';
+            }
+
+            $pagesDir = (string) $this->grav['locator']->findResource('page://', true);
+            $lines[] = 'page://=' . $pagesDir;
+            $dir = $pagesDir;
+            foreach ($parts as $seg) {
+                $match = null;
+                foreach (scandir($dir) ?: [] as $name) {
+                    if ($name[0] !== '.' && is_dir($dir . '/' . $name) && preg_replace('/^\d+\./', '', $name) === $seg) {
+                        $match = $name;
+                        break;
+                    }
+                }
+                if ($match === null) {
+                    $lines[] = 'ordner fuer "' . $seg . '" in ' . $dir . ' NICHT gefunden';
+                    break;
+                }
+                $dir .= '/' . $match;
+            }
+            if (is_dir($dir)) {
+                $md = array_map('basename', glob($dir . '/*.md') ?: []);
+                $lines[] = 'ordner=' . $dir . ' md=[' . implode(', ', $md) . ']';
+            }
+
+            $this->grav['log']->warning('[photo-metadata] ' . implode(' | ', $lines));
+        } catch (\Throwable $e) {
+            $this->grav['log']->warning('[photo-metadata] Diagnose fehlgeschlagen: ' . $e->getMessage());
+        }
     }
 
     /** Prüft, dass der Dateiname ein Bild der Seite ist. Verhindert Pfadtricks. */
