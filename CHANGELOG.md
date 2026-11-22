@@ -1,3 +1,7 @@
+# 0.2.0
+
+- Plugin nur für Grav 2 mit Admin2
+
 # 0.1.4
 
 - Button-Skript erst nach DOMContentLoaded starten
