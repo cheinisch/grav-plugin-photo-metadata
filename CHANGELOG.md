@@ -1,3 +1,9 @@
+# 0.2.4
+
+- Admin2-Layout für die Foto-Metadaten-Seite übernehmen
+- Seitenliste als Miller-Spalten wie im Admin2
+- Seitenliste im Admin als Baum anzeigen
+
 # 0.2.3
 
 - Route-Registrierung nur laden, wenn der Controller vorhanden ist
