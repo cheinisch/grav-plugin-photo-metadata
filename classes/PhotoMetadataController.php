@@ -31,29 +31,39 @@ class PhotoMetadataController extends AbstractApiController
         $pages = $this->grav['pages'];
         $items = [];
 
-        // Alle Seiten aus all() (flach, Tiefe zuerst). Root() wirft in diesem Kontext
-        // „Internal error“. Eintrag auflösen: als Seite, sonst über Route oder Schlüssel.
-        $resolve = static function ($value) use ($pages): ?\Grav\Common\Page\Interfaces\PageInterface {
-            if ($value instanceof \Grav\Common\Page\Interfaces\PageInterface) {
-                return $value;
-            }
-            return is_string($value) || is_int($value) ? $pages->find((string) $value) : null;
-        };
-
-        foreach ($pages->all() as $key => $item) {
-            $page = $resolve($item) ?? $resolve($key);
+        // Seiten aus dem Dateisystem: all() und root() schlagen auf dem Server fehl.
+        // Jeder Ordner unter page:// ist eine Route (ohne Nummernpräfix), aufgelöst über find().
+        $add = function ($page) use (&$items): void {
             if (!$page) {
-                continue;
+                return;
             }
             $count = count($page->media()->images());
             if ($count === 0) {
-                continue;
+                return;
             }
             $items[$page->route()] = [
                 'route'  => $page->route(),
                 'title'  => $page->title(),
                 'images' => $count,
             ];
+        };
+
+        $add($pages->find('/'));
+
+        $walk = function (string $dir, string $prefix) use (&$walk, $pages, $add): void {
+            foreach (scandir($dir) ?: [] as $name) {
+                if ($name === '.' || $name === '..' || $name[0] === '.' || !is_dir($dir . '/' . $name)) {
+                    continue;
+                }
+                $route = $prefix . '/' . preg_replace('/^\d+\./', '', $name);
+                $add($pages->find($route));
+                $walk($dir . '/' . $name, $route);
+            }
+        };
+
+        $pagesDir = (string) $this->grav['locator']->findResource('page://', true);
+        if ($pagesDir !== '' && is_dir($pagesDir)) {
+            $walk($pagesDir, '');
         }
 
         // Elternseiten ohne eigene Bilder ergänzen, damit der Baum nicht auseinanderfällt.
