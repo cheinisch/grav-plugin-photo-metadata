@@ -95,7 +95,92 @@ const STYLE = `
   .pad { padding: 8px; margin: 0; }
   .empty { padding: 40px; text-align: center; color: var(--muted-foreground, #71717a); }
   .empty.err, .pad.err { color: #e5484d; }
+  a { color: var(--primary, #a855f7); }
+  .fmt { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px 14px; margin: 0; font-size: 13px; }
+  .fmt dt { color: var(--muted-foreground, #71717a); white-space: nowrap; }
+  .fmt dd { margin: 0; overflow-wrap: anywhere; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { border: 1px solid var(--border, #e4e4e7); border-radius: 999px; padding: 0 8px; font-size: 12px; }
+  details.raw { margin-top: 16px; }
+  details.raw summary { cursor: pointer; color: var(--muted-foreground, #71717a); font-size: 12px; }
+  .dlg { border: 1px solid var(--border, #e4e4e7); border-radius: var(--radius, .5rem); background: var(--card, #fff);
+    color: var(--card-foreground, var(--foreground, #09090b)); padding: 0; width: min(960px, 94vw); max-height: 90vh; }
+  .dlg::backdrop { background: rgba(0, 0, 0, .55); }
+  .dlg form { padding: 18px; display: flex; flex-direction: column; gap: 12px; margin: 0; }
+  .dlg h2 { margin: 0; font-size: 16px; font-weight: 600; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+  .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted-foreground, #71717a); }
+  .field.wide { grid-column: 1 / -1; }
+  .field input, .field textarea { font: 13px/1.4 system-ui, sans-serif; color: inherit; background: transparent;
+    border: 1px solid var(--input, #e4e4e7); border-radius: var(--radius-sm, 6px); padding: 6px 8px; box-sizing: border-box; width: 100%; }
+  .field textarea { min-height: 64px; resize: vertical; }
+  .field textarea.mono { font: 12px/1.5 ui-monospace, monospace; min-height: 110px; }
+  .dfoot { display: flex; justify-content: flex-end; gap: 8px; }
+  .dhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .dbody { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 18px; }
+  .dleft { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .dleft .preview { max-height: none; }
+  .dleft .btn { justify-content: center; }
+  .dlg details summary { cursor: pointer; color: var(--muted-foreground, #71717a); font-size: 12px; }
+  @media (max-width: 760px) { .dbody, .grid2 { grid-template-columns: 1fr; } }
 `;
+
+// Felder, die das Formular bearbeitet. Alle anderen Schlüssel stehen im JSON-Feld „Weitere Felder“.
+const FORM_FIELDS = ['alt', 'title', 'caption', 'description', 'author', 'keywords', 'gps', 'exposure', 'iso', 'focalLength', 'software'];
+// Reihenfolge und Beschriftung der aufbereiteten Anzeige.
+const LABELS = [
+  ['title', 'Titel'], ['caption', 'Beschreibung'], ['author', 'Autor'], ['keywords', 'Stichwörter'],
+  ['creationdate', 'Aufnahme'], ['exposure', 'Belichtung'], ['iso', 'ISO'], ['focalLength', 'Brennweite'],
+  ['software', 'Software'], ['gps', 'GPS'],
+];
+const KEY_RE = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+
+// Erzeugt YAML aus einem flachen Objekt. Strings als JSON (gültiges YAML), Listen als Blockliste.
+function toYaml(obj) {
+  const q = (k) => (KEY_RE.test(k) ? k : JSON.stringify(k));
+  const scalar = (v) => (v === null || v === undefined ? 'null' : (typeof v === 'object' ? JSON.stringify(v) : (typeof v === 'string' ? JSON.stringify(v) : String(v))));
+  return Object.entries(obj).map(([k, v]) => {
+    if (Array.isArray(v)) return v.length ? `${q(k)}:\n${v.map((i) => `  - ${scalar(i)}`).join('\n')}` : `${q(k)}: []`;
+    return `${q(k)}: ${scalar(v)}`;
+  }).join('\n') + '\n';
+}
+
+function fmtDate(val) {
+  const n = Number(val);
+  const d = new Date(n > 1e11 ? n : n * 1000);
+  return Number.isNaN(d.getTime()) ? String(val) : d.toLocaleString('de-DE');
+}
+
+function fmtSize(bytes) {
+  if (bytes === null || bytes === undefined) return '–';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function gpsHtml(val) {
+  const m = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(String(val));
+  if (!m) return esc(val);
+  const lat = Number(m[1]);
+  const lon = Number(m[2]);
+  return `${lat.toFixed(5)}, ${lon.toFixed(5)} · <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=15/${lat}/${lon}" target="_blank" rel="noopener">Karte</a>`;
+}
+
+function formatRows(v) {
+  const rows = [];
+  for (const [k, label] of LABELS) {
+    const val = v[k];
+    if (val === undefined || val === null || val === '' || (Array.isArray(val) && !val.length)) continue;
+    let html;
+    if (k === 'keywords') html = `<span class="chips">${(Array.isArray(val) ? val : [val]).map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</span>`;
+    else if (k === 'creationdate') html = esc(fmtDate(val));
+    else if (k === 'focalLength') html = esc(`${val} mm`);
+    else if (k === 'gps') html = gpsHtml(val);
+    else html = esc(Array.isArray(val) ? val.join(', ') : val);
+    rows.push(`<dt>${label}</dt><dd>${html}</dd>`);
+  }
+  return rows.length ? `<dl class="fmt">${rows.join('')}</dl>` : '<p class="muted">Keine Metadaten gespeichert.</p>';
+}
 
 class PhotoMetadataPage extends HTMLElement {
   constructor() {
@@ -149,6 +234,7 @@ class PhotoMetadataPage extends HTMLElement {
       if (e.target.matches('textarea')) this.state.draft = e.target.value;
     });
     root.querySelector('[data-side]').addEventListener('click', (e) => {
+      if (e.target.closest('[data-form]')) return this.openForm();
       if (e.target.matches('[data-save]')) this.save();
     });
 
@@ -351,30 +437,152 @@ class PhotoMetadataPage extends HTMLElement {
     this.shadowRoot.querySelector('[data-side]').innerHTML = `
       <div class="head">
         <div style="min-width:0"><h2>${esc(page ? page.title : meta.file)}</h2><div class="sub">${esc(meta.route)}</div></div>
-        <a class="btn" href="${esc(editUrl)}">Edit</a>
+        <div style="display:flex;gap:6px;flex:0 0 auto">
+          <button class="btn primary" data-form>Bearbeiten</button>
+          <a class="btn" href="${esc(editUrl)}">Edit</a>
+        </div>
       </div>
       <div class="label">Bild</div>
       <img class="preview" src="${esc(meta.url)}" alt="">
       <div class="sub" style="margin-top:4px">${esc(meta.file)}</div>
-      <div class="label">Metadaten (YAML)</div>
-      <textarea spellcheck="false">${esc(this.state.draft)}</textarea>
-      <div style="margin-top:8px"><button class="btn primary" data-save>Speichern</button></div>
+      <div class="label">Metadaten</div>
+      ${formatRows(meta.values || {})}
+      <details class="raw">
+        <summary>YAML-Rohdaten</summary>
+        <textarea spellcheck="false" style="width:100%;box-sizing:border-box;min-height:220px;margin-top:8px;background:transparent;color:inherit;border:1px solid var(--input,#e4e4e7);border-radius:var(--radius-sm,6px);padding:8px;font:12px/1.5 ui-monospace,monospace">${esc(this.state.draft)}</textarea>
+        <div style="margin-top:8px"><button class="btn" data-save>Speichern</button></div>
+      </details>
       <div class="msg" data-msg></div>`;
     this.flash(this.state.msg, this.state.err);
   }
 
-  async save() {
+  async putMeta(yaml) {
+    return api('/photo-metadata/meta', {
+      method: 'PUT',
+      body: JSON.stringify({ route: this.state.route, file: this.state.file, yaml }),
+    });
+  }
+
+  async save(yaml = this.state.draft) {
     try {
-      const meta = await api('/photo-metadata/meta', {
-        method: 'PUT',
-        body: JSON.stringify({ route: this.state.route, file: this.state.file, yaml: this.state.draft }),
-      });
+      const meta = await this.putMeta(yaml);
       this.state.meta = meta;
       this.state.draft = meta.yaml;
       this.renderSide();
       this.flash('Gespeichert.', false);
     } catch (e) {
       this.flash(e.message, true);
+    }
+  }
+
+  openForm() {
+    const meta = this.state.meta;
+    if (!meta) return;
+    const v = meta.values || {};
+    const info = meta.info || {};
+    const text = (name, label, value = '', wide = false) =>
+      `<label class="field${wide ? ' wide' : ''}"><span>${label}</span><input name="${name}" value="${esc(value)}"></label>`;
+    const area = (name, label, value = '') =>
+      `<label class="field wide"><span>${label}</span><textarea name="${name}">${esc(value)}</textarea></label>`;
+
+    const rest = {};
+    Object.keys(v).forEach((k) => { if (!FORM_FIELDS.includes(k)) rest[k] = v[k]; });
+    const kw = Array.isArray(v.keywords) ? v.keywords.join(', ') : (v.keywords ?? '');
+    const alt = v.alt || v.title || meta.file;
+    const dims = info.width && info.height ? `${info.width} × ${info.height}` : '–';
+
+    const d = this.shadowRoot.querySelector('[data-dialog]');
+    if (d) d.remove();
+    this.shadowRoot.insertAdjacentHTML('beforeend', `
+      <dialog class="dlg" data-dialog>
+        <form data-form-el>
+          <div class="dhead">
+            <div><h2>${esc(meta.file)}</h2><div class="sub">Datei-Details und Metadaten</div></div>
+            <button type="button" class="btn" data-cancel>Schließen</button>
+          </div>
+          <div class="dbody">
+            <div class="dleft">
+              <img class="preview" src="${esc(meta.url)}" alt="">
+              <dl class="fmt">
+                <dt>Pfad</dt><dd>${esc(meta.route)}</dd>
+                <dt>Größe</dt><dd>${esc(fmtSize(info.size))}</dd>
+                <dt>Maße</dt><dd>${esc(dims)}</dd>
+                <dt>Geändert</dt><dd>${esc(info.modified ? fmtDate(info.modified) : '–')}</dd>
+              </dl>
+              <button type="button" class="btn" data-copy="${esc(meta.url)}">URL kopieren</button>
+              <button type="button" class="btn" data-copy="![${esc(alt)}](${esc(meta.url)})">Markdown kopieren</button>
+            </div>
+            <div class="grid2">
+              ${text('alt', 'Alt-Text', v.alt ?? '', true)}
+              ${text('title', 'Titel', v.title ?? '', true)}
+              ${area('caption', 'Bildunterschrift', v.caption ?? '')}
+              ${area('description', 'Beschreibung', v.description ?? '')}
+              ${text('keywords', 'Stichwörter (kommagetrennt)', kw, true)}
+              ${text('author', 'Autor', v.author ?? '')}
+              ${text('software', 'Software', v.software ?? '')}
+              ${text('exposure', 'Belichtung', v.exposure ?? '')}
+              ${text('iso', 'ISO', v.iso ?? '')}
+              ${text('focalLength', 'Brennweite (mm)', v.focalLength ?? '')}
+              ${text('gps', 'GPS (Breite, Länge)', v.gps ?? '', true)}
+            </div>
+          </div>
+          <details>
+            <summary>Weitere Felder (JSON-Objekt)</summary>
+            <textarea class="mono" name="rest" style="width:100%;box-sizing:border-box;margin-top:8px;background:transparent;color:inherit;border:1px solid var(--input,#e4e4e7);border-radius:var(--radius-sm,6px);padding:8px;font:12px/1.5 ui-monospace,monospace;min-height:110px">${esc(JSON.stringify(rest, null, 2))}</textarea>
+          </details>
+          <div class="msg err" data-dmsg></div>
+          <div class="dfoot">
+            <button type="reset" class="btn">Zurücksetzen</button>
+            <button type="button" class="btn primary" data-dsave>Speichern</button>
+          </div>
+        </form>
+      </dialog>`);
+    const dlg = this.shadowRoot.querySelector('[data-dialog]');
+    dlg.querySelector('[data-cancel]').addEventListener('click', () => dlg.close());
+    dlg.querySelector('[data-dsave]').addEventListener('click', () => this.saveForm(dlg));
+    dlg.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => {
+      navigator.clipboard?.writeText(b.dataset.copy).then(() => this.flash('Kopiert.', false), () => this.flash('Kopieren nicht möglich.', true));
+    }));
+    dlg.showModal();
+  }
+
+  async saveForm(dlg) {
+    const f = dlg.querySelector('form');
+    const get = (n) => String(f.elements[n].value ?? '').trim();
+    const dmsg = dlg.querySelector('[data-dmsg]');
+    let out;
+    try {
+      out = JSON.parse(get('rest') || '{}');
+      if (!out || typeof out !== 'object' || Array.isArray(out)) throw new Error('nicht-objekt');
+    } catch (e) {
+      dmsg.textContent = 'Die weiteren Felder müssen ein JSON-Objekt sein.';
+      return;
+    }
+    const set = (k, val) => { if (val !== '') out[k] = val; };
+    set('title', get('title'));
+    set('alt', get('alt'));
+    set('caption', get('caption'));
+    set('description', get('description'));
+    set('author', get('author'));
+    set('gps', get('gps'));
+    set('exposure', get('exposure'));
+    set('software', get('software'));
+    const kw = get('keywords').split(',').map((x) => x.trim()).filter(Boolean);
+    if (kw.length) out.keywords = kw;
+    const num = (s) => (/^-?\d+(\.\d+)?$/.test(s) ? Number(s) : s);
+    if (get('iso')) out.iso = num(get('iso'));
+    if (get('focalLength')) out.focalLength = num(get('focalLength'));
+
+    const yaml = Object.keys(out).length ? toYaml(out) : '';
+    try {
+      const meta = await this.putMeta(yaml);
+      this.state.meta = meta;
+      this.state.draft = meta.yaml;
+      dlg.close();
+      this.renderSide();
+      this.flash('Gespeichert.', false);
+    } catch (e) {
+      dmsg.textContent = e.message;
     }
   }
 

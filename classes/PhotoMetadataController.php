@@ -32,6 +32,7 @@ class PhotoMetadataController extends AbstractApiController
             $items[] = [
                 'file' => $name,
                 'url'  => $medium->url(),
+                'info' => $this->fileInfo($page, $name),
                 'meta' => $this->readSidecar($this->sidecarPath($page, $name)),
             ];
         }
@@ -157,6 +158,20 @@ class PhotoMetadataController extends AbstractApiController
         return $file;
     }
 
+    /** @return array{width: ?int, height: ?int, size: ?int, modified: ?int} */
+    private function fileInfo($page, string $file): array
+    {
+        $path = $page->path() . DIRECTORY_SEPARATOR . $file;
+        $exists = is_file($path);
+        $dims = $exists ? @getimagesize($path) : false;
+        return [
+            'width'    => is_array($dims) ? (int) $dims[0] : null,
+            'height'   => is_array($dims) ? (int) $dims[1] : null,
+            'size'     => $exists ? (int) filesize($path) : null,
+            'modified' => $exists ? (int) filemtime($path) : null,
+        ];
+    }
+
     private function sidecarPath($page, string $file): string
     {
         return $page->path() . DIRECTORY_SEPARATOR . $file . '.meta.yaml';
@@ -182,6 +197,7 @@ class PhotoMetadataController extends AbstractApiController
             'route'  => $page->route(),
             'file'   => $file,
             'url'    => $page->media()->images()[$file]->url(),
+            'info'   => $this->fileInfo($page, $file),
             'yaml'   => $raw,
             'values' => $this->readSidecar($path),
         ];
