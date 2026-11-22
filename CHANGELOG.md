@@ -1,3 +1,10 @@
+# 0.1.2
+
+- Kamera-Button in Medienkarten über CSS statt <i>-Element
+- Button in Admin-Medienkarten öffnet Foto-Metadaten
+- Batch-Editor für Foto-Metadaten im Admin
+- EXIF- und GPS-Schalter pro Seite überschreibbar machen
+
 # 0.1.1
 
 - Release-Workflow mit Changelog und Release-Notes
