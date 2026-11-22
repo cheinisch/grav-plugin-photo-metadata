@@ -81,7 +81,7 @@ class PhotoMetadataController extends AbstractApiController
         $route ??= (string) ($request->getQueryParams()['route'] ?? '');
         $page = $route !== '' ? $this->grav['pages']->find($route, true) : null;
         if (!$page) {
-            throw new NotFoundException('Seite nicht gefunden.');
+            throw new NotFoundException('Seite nicht gefunden: ' . ($route !== '' ? $route : '(leer)'));
         }
         return $page;
     }
