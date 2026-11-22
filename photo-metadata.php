@@ -45,7 +45,6 @@ class PhotoMetadataPlugin extends Plugin
             return;
         }
 
-        $this->grav['assets']->addCss('plugin://photo-metadata/css/photo-metadata.css');
         $this->grav['assets']->addInlineJs($this->buttonScript());
     }
 
@@ -60,19 +59,26 @@ class PhotoMetadataPlugin extends Plugin
     if (!match) { return; }
     var editorUrl = match[1] + '/{$editorRoute}';
     var route = match[2];
+    var camera = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="lucide-icon lucide lucide-camera"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>';
 
     function addButtons() {
-        document.querySelectorAll('.dz-preview').forEach(function (card) {
-            if (card.querySelector('.dz-photo-metadata')) { return; }
-            var anchor = card.querySelector('a.dz-metadata');
-            var name = card.querySelector('[data-dz-name]');
-            if (!anchor || !name) { return; }
+        document.querySelectorAll('button[title="Edit metadata"]').forEach(function (editBtn) {
+            var group = editBtn.parentElement;
+            var row = group && group.parentElement;
+            if (!row || row.querySelector('[data-photo-metadata]')) { return; }
+            var nameEl = row.querySelector('span.truncate');
+            if (!nameEl) { return; }
 
-            var link = document.createElement('a');
-            link.className = 'dz-photo-metadata';
-            link.title = '{$title}';
-            link.href = editorUrl + '?page=' + encodeURIComponent(route) + '#pm-' + encodeURIComponent(name.textContent.trim());
-            anchor.insertAdjacentElement('afterend', link);
+            var btn = editBtn.cloneNode(false);
+            btn.setAttribute('data-photo-metadata', '');
+            btn.setAttribute('title', '{$title}');
+            btn.innerHTML = camera;
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                location.href = editorUrl + '?page=' + encodeURIComponent(route) + '#pm-' + encodeURIComponent(nameEl.textContent.trim());
+            });
+            editBtn.insertAdjacentElement('afterend', btn);
         });
     }
 
