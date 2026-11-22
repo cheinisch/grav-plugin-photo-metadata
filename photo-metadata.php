@@ -25,7 +25,13 @@ class PhotoMetadataPlugin extends Plugin
     /** API-Routen für die Admin2-Seite. Nur geladen, wenn das API-Plugin aktiv ist. */
     public function onApiRegisterRoutes(\RocketTheme\Toolbox\Event\Event $event): void
     {
-        require_once __DIR__ . '/classes/PhotoMetadataController.php';
+        // Fehlt der Ordner (unvollständige Installation), nur diese Seite weglassen.
+        // Ein require_once auf eine fehlende Datei würde sonst jede API-Anfrage abbrechen.
+        $controllerFile = __DIR__ . '/classes/PhotoMetadataController.php';
+        if (!is_file($controllerFile)) {
+            return;
+        }
+        require_once $controllerFile;
 
         $c = PhotoMetadata\PhotoMetadataController::class;
         $routes = $event['routes'];
