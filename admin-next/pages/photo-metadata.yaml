@@ -1,0 +1,5 @@
+id: photo-metadata
+plugin: photo-metadata
+title: Foto-Metadaten
+icon: fa-camera
+page_type: component
