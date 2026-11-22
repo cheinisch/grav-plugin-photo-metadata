@@ -61,8 +61,14 @@ const STYLE = `
   .item:hover { background: var(--muted, #f4f4f5); }
   .item.dim .t { opacity: .6; }
   .item.sel { background: var(--primary, #3c83f6); color: var(--primary-foreground, #fff); }
-  .item .ico { display: inline-flex; opacity: .7; flex: 0 0 auto; }
-  .item .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .item .ico { display: inline-flex; opacity: .6; flex: 0 0 auto; }
+  .item .ico.pub { color: #a855f7; opacity: 1; }
+  .item.sel .ico.pub { color: inherit; }
+  .item .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .item .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .item .p { font-size: 12px; opacity: .7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .st { flex: 0 0 auto; font-size: 10px; line-height: 1; color: #22c55e; }
+  .item .st.off { color: var(--muted-foreground, #71717a); }
   .item .chev { opacity: .5; display: inline-flex; }
   .main { padding: 14px; min-width: 0; }
   .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
@@ -154,6 +160,7 @@ class PhotoMetadataPage extends HTMLElement {
       route: p.route,
       title: p.title || p.route,
       hasChildren: !!p.has_children,
+      published: p.published !== false,
       ancestorOnly: !!p.ancestor_only,   // Ordner ohne eigene Seite (nur zum Öffnen)
       children: null,   // null = noch nicht geladen
       loading: false,
@@ -245,8 +252,13 @@ class PhotoMetadataPage extends HTMLElement {
       const dim = n.ancestorOnly ? ' dim' : '';
       const chev = n.hasChildren ? `<span class="chev">${ICON_CHEV}</span>` : '';
       const icon = n.hasChildren ? ICON_FOLDER : ICON_FILE;
+      const pub = n.published ? ' pub' : '';
+      const st = n.published
+        ? '<span class="st" title="Veröffentlicht">●</span>'
+        : '<span class="st off" title="Nicht veröffentlicht">○</span>';
       return `<button class="item${sel}${dim}" data-route="${esc(n.route)}" data-level="${level}" title="${esc(n.route)}">
-        <span class="ico">${icon}</span><span class="t">${esc(n.title)}</span>${chev}</button>`;
+        <span class="ico${pub}">${icon}</span>
+        <span class="txt"><span class="t">${esc(n.title)}</span><span class="p">${esc(n.route)}</span></span>${st}${chev}</button>`;
     };
 
     const q = s.filter;
