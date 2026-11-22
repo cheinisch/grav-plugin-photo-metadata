@@ -51,8 +51,8 @@ const STYLE = `
     border-bottom: 1px solid var(--border, #e4e4e7); font-size: 13px; }
   .crumbs { display: flex; gap: 6px; align-items: center; color: var(--muted-foreground, #71717a); min-width: 0; overflow: hidden; white-space: nowrap; }
   .crumbs b { color: var(--foreground, #09090b); font-weight: 600; }
-  .body { display: grid; grid-template-columns: auto minmax(0, 1fr) 340px; min-height: 68vh; }
-  .left { border-right: 1px solid var(--border, #e4e4e7); min-height: 100%; }
+  .body { display: grid; grid-template-columns: clamp(230px, 40%, 560px) minmax(0, 1fr) 340px; min-height: 68vh; }
+  .left { border-right: 1px solid var(--border, #e4e4e7); min-height: 100%; min-width: 0; }
   .mcols { display: flex; overflow-x: auto; min-height: 100%; }
   .mcol { flex: 0 0 230px; border-right: 1px solid var(--border, #e4e4e7); overflow-y: auto; padding: 6px; }
   .mcol:last-child { border-right: 0; }
