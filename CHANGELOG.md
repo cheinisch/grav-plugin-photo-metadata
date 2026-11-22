@@ -1,3 +1,7 @@
+# 0.2.1
+
+- Admin2-Seite Foto-Metadaten: Seiten, Bilder und Sidecar-YAML bearbeiten
+
 # 0.2.0
 
 - Plugin nur für Grav 2 mit Admin2
