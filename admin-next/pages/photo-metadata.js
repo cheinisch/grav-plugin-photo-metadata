@@ -19,21 +19,22 @@ async function api(path, opts = {}) {
 
 const STYLE = `
   :host { display: block; font: 14px/1.4 system-ui, sans-serif; color: inherit; }
-  .grid { display: grid; grid-template-columns: 300px 1fr 380px; gap: 16px; min-height: 70vh; }
+  .grid { display: grid; grid-template-columns: 500px 1fr 380px; gap: 16px; min-height: 70vh; }
   .col { border: 1px solid rgba(127,127,127,.3); border-radius: 8px; padding: 12px; overflow: auto; }
   h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; opacity: .7; }
   input[type=search], textarea { width: 100%; box-sizing: border-box; background: transparent; color: inherit;
     border: 1px solid rgba(127,127,127,.4); border-radius: 6px; padding: 6px; font: inherit; }
   textarea { min-height: 360px; font-family: ui-monospace, monospace; font-size: 12px; }
-  .row { display: flex; align-items: center; gap: 2px; }
-  .tog { background: none; border: 0; color: inherit; cursor: pointer; width: 20px; padding: 0; opacity: .7; }
-  .tog.none { visibility: hidden; }
-  .item { flex: 1; min-width: 0; text-align: left; background: none; border: 0; color: inherit;
-    padding: 4px 6px; border-radius: 6px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .item:hover, .item.sel { background: rgba(127,127,127,.2); }
-  .item.dim { opacity: .55; }
-  .kids { margin-left: 10px; padding-left: 8px; border-left: 1px solid rgba(127,127,127,.25); }
-  .kids.hidden { display: none; }
+  .mcols { display: flex; min-height: 300px; overflow-x: auto; margin-top: 8px; border-top: 1px solid rgba(127,127,127,.2); }
+  .mcol { flex: 0 0 230px; border-right: 1px solid rgba(127,127,127,.2); overflow-y: auto; padding: 4px; }
+  .item { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; text-align: left;
+    background: none; border: 0; color: inherit; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+  .item:hover { background: rgba(127,127,127,.15); }
+  .item.sel { background: #7c5cff; color: #fff; }
+  .item.dim .t { opacity: .55; }
+  .item .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .item .r { font-size: 11px; opacity: .7; white-space: nowrap; }
+  .item .chev { opacity: .6; }
   .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
   .thumb { background: none; border: 2px solid transparent; border-radius: 6px; padding: 4px; color: inherit; cursor: pointer; }
   .thumb.sel { border-color: #7c5cff; }
@@ -48,7 +49,7 @@ class PhotoMetadataPage extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this.state = { pages: [], filter: '', route: null, images: [], file: null, draft: '', meta: null, msg: '', err: false };
+    this.state = { pages: [], filter: '', path: [], route: null, images: [], file: null, draft: '', meta: null, msg: '', err: false };
   }
 
   connectedCallback() {
@@ -66,14 +67,17 @@ class PhotoMetadataPage extends HTMLElement {
       this.renderPages();
     });
     root.querySelector('[data-pages]').addEventListener('click', (e) => {
-      const tog = e.target.closest('[data-toggle]');
-      if (tog) {
-        tog.closest('.node').querySelector('.kids')?.classList.toggle('hidden');
-        tog.textContent = tog.textContent === '▾' ? '▸' : '▾';
-        return;
-      }
       const b = e.target.closest('[data-route]');
-      if (b) this.selectPage(b.dataset.route);
+      if (!b) return;
+      const level = Number(b.dataset.level);
+      const route = b.dataset.route;
+      this.state.path = [...this.state.path.slice(0, level), route];
+      const node = this.findNode(route);
+      if (node && node.images) {
+        this.selectPage(route);
+      } else {
+        this.renderPages();
+      }
     });
     root.querySelector('[data-images]').addEventListener('click', (e) => {
       const b = e.target.closest('[data-file]');
@@ -111,30 +115,41 @@ class PhotoMetadataPage extends HTMLElement {
     return roots;
   }
 
-  /** Gibt HTML für einen Knoten zurück, leer wenn weder er noch ein Kind zum Filter passt. */
-  renderNode(n, q) {
-    const kids = n.children.map((c) => this.renderNode(c, q)).join('');
-    const selfMatch = !q || n.title.toLowerCase().includes(q) || n.route.toLowerCase().includes(q);
-    if (!selfMatch && !kids) return '';
-
-    const sel = n.route === this.state.route ? ' sel' : '';
-    const dim = n.images ? '' : ' dim';
-    const count = n.images ? ` <span class="muted">(${n.images})</span>` : '';
-    const tog = n.children.length
-      ? `<button class="tog" data-toggle title="Aufklappen">▾</button>`
-      : `<button class="tog none" tabindex="-1">▾</button>`;
-    return `<div class="node">
-      <div class="row">${tog}<button class="item${sel}${dim}" data-route="${esc(n.route)}" title="${esc(n.route)}">${esc(n.title)}${count}</button></div>
-      ${kids ? `<div class="kids">${kids}</div>` : ''}
-    </div>`;
+  findNode(route) {
+    return this.buildTree(this.state.pages).flatMap(function walk(n) { return [n, ...n.children.flatMap(walk)]; })
+      .find((n) => n.route === route) || null;
   }
 
   renderPages() {
     const q = this.state.filter;
     const tree = this.buildTree(this.state.pages);
-    const html = tree.map((n) => this.renderNode(n, q)).join('');
-    this.shadowRoot.querySelector('[data-pages]').innerHTML = html
-      || '<p class="muted">Keine Seiten mit Bildern gefunden.</p>';
+    const itemHtml = (n, level, onPath) => {
+      const dim = n.images ? '' : ' dim';
+      const sel = onPath ? ' sel' : '';
+      const count = n.images ? `<span class="r">${n.images}</span>` : '';
+      const chev = n.children.length ? '<span class="chev">›</span>' : '<span></span>';
+      return `<button class="item${sel}${dim}" data-route="${esc(n.route)}" data-level="${level}" title="${esc(n.route)}">
+        <span class="t">${esc(n.title)}</span><span style="display:flex;gap:6px;align-items:center">${count}${chev}</span></button>`;
+    };
+
+    let columns;
+    if (q) {
+      // Suche: Treffer als flache Liste in einer Spalte
+      const flat = this.state.pages.filter((p) => p.route.toLowerCase().includes(q) || String(p.title).toLowerCase().includes(q));
+      columns = [flat.map((p) => ({ ...p, children: [] }))];
+    } else {
+      columns = [tree];
+      this.state.path.forEach((route) => {
+        const node = this.findNode(route);
+        if (node && node.children.length) columns.push(node.children);
+      });
+    }
+
+    const html = columns.map((list, level) => `<div class="mcol">${list.map((n) =>
+      itemHtml(n, level, !q && this.state.path[level] === n.route)).join('')}</div>`).join('');
+
+    this.shadowRoot.querySelector('[data-pages]').innerHTML = `<div class="mcols">${html}</div>`
+      + (columns[0].length ? '' : '<p class="muted">Keine Seiten mit Bildern gefunden.</p>');
   }
 
   async selectPage(route) {
