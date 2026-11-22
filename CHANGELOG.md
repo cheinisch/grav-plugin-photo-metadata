@@ -1,3 +1,7 @@
+# 0.1.4
+
+- Button-Skript erst nach DOMContentLoaded starten
+
 # 0.1.3
 
 - Seiten-Route aus Admin-URL mit /edit korrekt lesen
