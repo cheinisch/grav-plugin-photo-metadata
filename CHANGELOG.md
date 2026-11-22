@@ -1,3 +1,8 @@
+# 0.1.3
+
+- Seiten-Route aus Admin-URL mit /edit korrekt lesen
+- Medienbutton an neue Admin-Kartenstruktur anpassen
+
 # 0.1.2
 
 - Kamera-Button in Medienkarten über CSS statt <i>-Element

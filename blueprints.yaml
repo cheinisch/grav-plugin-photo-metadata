@@ -1,7 +1,7 @@
 name: Photo Metadata
 slug: photo-metadata
 type: plugin
-version: 0.1.2
+version: 0.1.3
 description: Bildmetadaten (meta.yaml) bearbeiten und die Anzeige von EXIF- und GPS-Daten steuern.
 icon: camera
 author:
