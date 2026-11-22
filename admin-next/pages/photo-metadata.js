@@ -438,8 +438,8 @@ class PhotoMetadataPage extends HTMLElement {
       <div class="head">
         <div style="min-width:0"><h2>${esc(page ? page.title : meta.file)}</h2><div class="sub">${esc(meta.route)}</div></div>
         <div style="display:flex;gap:6px;flex:0 0 auto">
-          <button class="btn primary" data-form>Bearbeiten</button>
-          <a class="btn" href="${esc(editUrl)}">Edit</a>
+          <button class="btn" data-form>Metadaten bearbeiten</button>
+          <a class="btn primary" href="${esc(editUrl)}" target="_top">Seite bearbeiten</a>
         </div>
       </div>
       <div class="label">Bild</div>
