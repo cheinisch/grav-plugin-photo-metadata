@@ -30,21 +30,22 @@ class PhotoMetadataController extends AbstractApiController
 
         $pages = $this->grav['pages'];
         $items = [];
-        foreach ($pages->all() as $key => $_) {
-            $page = $pages->find((string) $key);
-            if (!$page) {
-                continue;
-            }
+
+        // Seitenbaum rekursiv durchlaufen: zuverlässiger als all(), dessen Schlüssel keine Routen sein müssen.
+        $collect = function ($page) use (&$collect, &$items): void {
             $count = count($page->media()->images());
-            if ($count === 0) {
-                continue;
+            if ($count > 0) {
+                $items[$page->route()] = [
+                    'route'  => $page->route(),
+                    'title'  => $page->title(),
+                    'images' => $count,
+                ];
             }
-            $items[$page->route()] = [
-                'route'  => $page->route(),
-                'title'  => $page->title(),
-                'images' => $count,
-            ];
-        }
+            foreach ($page->children() as $child) {
+                $collect($child);
+            }
+        };
+        $collect($pages->root());
 
         // Elternseiten ohne eigene Bilder ergänzen, damit der Baum nicht auseinanderfällt.
         foreach (array_keys($items) as $route) {

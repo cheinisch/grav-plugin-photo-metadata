@@ -29,8 +29,8 @@ const STYLE = `
     border-bottom: 1px solid var(--border, #e4e4e7); font-size: 13px; }
   .crumbs { display: flex; gap: 6px; align-items: center; color: var(--muted-foreground, #71717a); min-width: 0; overflow: hidden; white-space: nowrap; }
   .crumbs b { color: var(--foreground, #09090b); font-weight: 600; }
-  .body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; min-height: 68vh; }
-  .left { display: grid; grid-template-columns: minmax(0, 1fr); border-right: 1px solid var(--border, #e4e4e7); }
+  .body { display: grid; grid-template-columns: auto minmax(0, 1fr) 340px; min-height: 68vh; }
+  .left { border-right: 1px solid var(--border, #e4e4e7); min-height: 100%; }
   .mcols { display: flex; overflow-x: auto; min-height: 100%; }
   .mcol { flex: 0 0 230px; border-right: 1px solid var(--border, #e4e4e7); overflow-y: auto; padding: 6px; }
   .mcol:last-child { border-right: 0; }
@@ -50,7 +50,8 @@ const STYLE = `
   .thumb.sel { border-color: var(--primary, #3c83f6); }
   .thumb img { width: 100%; height: 96px; object-fit: cover; border-radius: var(--radius-sm, 6px); display: block; }
   .thumb span { display: block; margin-top: 4px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .side { padding: 16px; overflow: auto; }
+  .side { padding: 16px; overflow: auto; border-left: 1px solid var(--border, #e4e4e7); }
+  .global { padding: 0 16px 10px; }
   .side h2 { margin: 0; font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
   .side .sub { color: var(--muted-foreground, #71717a); font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
   .side .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
@@ -83,11 +84,12 @@ class PhotoMetadataPage extends HTMLElement {
           <input type="search" placeholder="Seite suchen…" data-filter style="width:220px;background:transparent;color:inherit;border:1px solid var(--input,#e4e4e7);border-radius:var(--radius-sm,6px);padding:5px 8px;font:inherit;font-size:13px">
         </div>
         <div class="body">
-          <div class="left"><div data-pages></div></div>
+          <div class="left" data-pages></div>
           <div class="main" data-images><div class="empty">Links eine Seite wählen.</div></div>
+          <div class="side" data-side><div class="empty">Ein Bild wählen, um die Metadaten zu bearbeiten.</div></div>
         </div>
-      </div>
-      <div class="frame" style="margin-top:14px"><div class="side" data-side><div class="empty">Ein Bild wählen, um die Metadaten zu bearbeiten.</div></div></div>`;
+        <div class="msg global" data-global></div>
+      </div>`;
     this.renderCrumbs();
 
     const root = this.shadowRoot;
@@ -260,11 +262,10 @@ class PhotoMetadataPage extends HTMLElement {
   flash(msg, err) {
     this.state.msg = msg;
     this.state.err = err;
-    const box = this.shadowRoot.querySelector('[data-msg]');
-    if (box) {
+    this.shadowRoot.querySelectorAll('[data-msg],[data-global]').forEach((box) => {
       box.textContent = msg || '';
-      box.className = 'msg' + (err ? ' err' : '');
-    }
+      box.className = 'msg' + (err ? ' err' : '') + (box.hasAttribute('data-global') ? ' global' : '');
+    });
   }
 }
 
