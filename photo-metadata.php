@@ -2,19 +2,35 @@
 namespace Grav\Plugin;
 
 use Grav\Common\Plugin;
+use Grav\Common\Utils;
+use Grav\Plugin\Admin\Admin;
+use RocketTheme\Toolbox\Event\Event;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * Photo Metadata
  *
- * Stellt die Einstellungen für EXIF- und GPS-Anzeige den Templates bereit.
- * Die Bearbeitung der Metadaten (meta.yaml) folgt in einem späteren Schritt.
+ * Stellt die Einstellungen für EXIF- und GPS-Anzeige den Templates bereit und
+ * bearbeitet die Bild-Metadaten im Admin (Batch-Seite pro Seite/Album).
+ *
+ * Metadaten liegen als Grav-Sidecar neben dem Bild: `<bild>.<ext>.meta.yaml`.
  */
 class PhotoMetadataPlugin extends Plugin
 {
+    /** Felder, die der Batch-Editor schreibt. Andere Schlüssel bleiben unangetastet. */
+    private const EDITABLE_FIELDS = ['title', 'description', 'alt', 'keywords', 'author'];
+
+    private const ADMIN_ROUTE = 'photo-metadata';
+    private const SAVE_TASK_METHOD = 'taskSavePhotoMetadata';
+
     public static function getSubscribedEvents(): array
     {
         return [
-            'onTwigSiteVariables' => ['onTwigSiteVariables', 0],
+            'onTwigSiteVariables'        => ['onTwigSiteVariables', 0],
+            'onAdminMenu'                => ['onAdminMenu', 0],
+            'onAdminTwigTemplatePaths'   => ['onAdminTwigTemplatePaths', 0],
+            'onAdminPage'                => ['onAdminPage', 0],
+            'onAdminTaskExecute'         => ['onAdminTaskExecute', 0],
         ];
     }
 
@@ -46,5 +62,155 @@ class PhotoMetadataPlugin extends Plugin
         }
 
         $this->grav['twig']->twig_vars['photo_metadata'] = $settings;
+    }
+
+    /* ---------------------------------------------------------------------
+     * Admin: Batch-Editor
+     * ------------------------------------------------------------------- */
+
+    public function onAdminMenu(): void
+    {
+        $this->grav['twig']->plugins_hooked_nav['Foto-Metadaten'] = [
+            'route'     => self::ADMIN_ROUTE,
+            'icon'      => 'fa-camera',
+            'authorize' => ['admin.login', 'admin.super'],
+            'priority'  => 0,
+        ];
+    }
+
+    public function onAdminTwigTemplatePaths(Event $event): void
+    {
+        $paths = &$event['paths'];
+        $paths[] = __DIR__ . '/templates';
+    }
+
+    public function onAdminPage(Event $event): void
+    {
+        if (!$this->isBatchRoute()) {
+            return;
+        }
+
+        /** @var \Grav\Common\Page\Page $page */
+        $page = $event['page'];
+        $page->init(new \SplFileInfo(__DIR__ . '/pages/admin/' . self::ADMIN_ROUTE . '.md'));
+
+        $pagePath = (string) $this->grav['uri']->query('page');
+        $target = $pagePath !== '' ? $this->grav['pages']->find($pagePath) : null;
+
+        $twig = $this->grav['twig'];
+        $twig->twig_vars['photo_metadata_page'] = $target ? $target->route() : '';
+        $twig->twig_vars['photo_metadata_items'] = $target ? $this->collectItems($target) : [];
+        $twig->twig_vars['photo_metadata_nonce'] = Admin::getNonce();
+        $twig->twig_vars['photo_metadata_fields'] = self::EDITABLE_FIELDS;
+    }
+
+    public function onAdminTaskExecute(Event $event): bool
+    {
+        if (($event['method'] ?? null) !== self::SAVE_TASK_METHOD) {
+            return false;
+        }
+
+        /** @var \Grav\Plugin\Admin\AdminBaseController $controller */
+        $controller = $event['controller'];
+        $post = $_POST;
+
+        $user = $this->grav['user'];
+        if (!$user->authorize('admin.login') && !$user->authorize('admin.super')) {
+            $controller->admin->setMessage('Keine Berechtigung.', 'error');
+            return true;
+        }
+
+        if (!Utils::verifyNonce($post['admin-nonce'] ?? '', 'admin-form')) {
+            $controller->admin->setMessage('Ungültiges Formular-Token.', 'error');
+            return true;
+        }
+
+        $page = $this->grav['pages']->find((string) ($post['page'] ?? ''));
+        if (!$page) {
+            $controller->admin->setMessage('Seite nicht gefunden.', 'error');
+            return true;
+        }
+
+        $submitted = $post['photo_metadata'] ?? [];
+        $saved = 0;
+
+        foreach ($page->media()->images() as $name => $medium) {
+            // Nur Dateien schreiben, die tatsächlich zur Seite gehören (kein frei gewählter Pfad).
+            if (!isset($submitted[$name]) || !is_array($submitted[$name])) {
+                continue;
+            }
+
+            $sidecar = $this->sidecarPath($medium);
+            $data = is_file($sidecar) ? (Yaml::parseFile($sidecar) ?: []) : [];
+
+            foreach (self::EDITABLE_FIELDS as $field) {
+                if (!array_key_exists($field, $submitted[$name])) {
+                    continue;
+                }
+                $value = $this->normalizeValue($field, $submitted[$name][$field]);
+                if ($value === null) {
+                    unset($data[$field]);
+                } else {
+                    $data[$field] = $value;
+                }
+            }
+
+            if ($data === []) {
+                if (is_file($sidecar)) {
+                    unlink($sidecar);
+                }
+                continue;
+            }
+
+            file_put_contents($sidecar, Yaml::dump($data, 4, 2));
+            $saved++;
+        }
+
+        $controller->admin->setMessage("Metadaten gespeichert: {$saved} Bild(er).", 'info');
+        return true;
+    }
+
+    private function isBatchRoute(): bool
+    {
+        $admin = $this->grav['admin'] ?? null;
+        return $admin && $admin->getCurrentRoute() === self::ADMIN_ROUTE;
+    }
+
+    /**
+     * @return array<int, array{name: string, url: string, values: array}>
+     */
+    private function collectItems($page): array
+    {
+        $items = [];
+        foreach ($page->media()->images() as $name => $medium) {
+            $sidecar = $this->sidecarPath($medium);
+            $values = is_file($sidecar) ? (Yaml::parseFile($sidecar) ?: []) : [];
+
+            $items[] = [
+                'name'   => $name,
+                'url'    => $medium->url(),
+                'values' => $values,
+            ];
+        }
+        return $items;
+    }
+
+    private function sidecarPath($medium): string
+    {
+        return $medium->path() . '.meta.yaml';
+    }
+
+    /**
+     * Normalisiert einen Formularwert. Leere Werte ergeben null (= Feld entfernen).
+     */
+    private function normalizeValue(string $field, $raw)
+    {
+        if ($field === 'keywords') {
+            $list = array_filter(array_map('trim', explode(',', (string) $raw)), 'strlen');
+            return $list ? array_values($list) : null;
+        }
+
+        $value = trim((string) $raw);
+        return $value === '' ? null : $value;
     }
 }

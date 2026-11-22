@@ -17,5 +17,5 @@ Dieses Dokument richtet sich an KI-Agenten, die an dem Grav-Plugin „Photo Meta
 
 ## Technische Regeln
 
-- Metadaten liegen in der `meta.yaml` neben dem Bild, nicht in der Seite.
+- Metadaten liegen als Grav-Sidecar neben dem Bild: `<bild>.<ext>.meta.yaml` (z. B. `foto.jpg.meta.yaml`), nicht in der Seite und nicht als `meta.yaml`.
 - Die Version steht in `blueprints.yaml`.
