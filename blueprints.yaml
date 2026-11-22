@@ -1,7 +1,7 @@
 name: Photo Metadata
 slug: photo-metadata
 type: plugin
-version: 0.2.2
+version: 0.2.3
 description: Anzeige von EXIF- und GPS-Daten steuern, auch pro Seite. Nur für Grav 2 mit Admin2.
 icon: camera
 author:
