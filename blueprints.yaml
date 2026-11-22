@@ -1,0 +1,49 @@
+name: Photo Metadata
+slug: photo-metadata
+type: plugin
+version: 0.1.0
+description: Bildmetadaten (meta.yaml) bearbeiten und die Anzeige von EXIF- und GPS-Daten steuern.
+icon: camera
+author:
+  name: Christian Heinisch
+homepage: https://github.com/cheinisch/grav-plugin-photo-metadata
+keywords: grav, plugin, photo, metadata, exif, gps, gallery
+bugs: https://github.com/cheinisch/grav-plugin-photo-metadata/issues
+docs: https://github.com/cheinisch/grav-plugin-photo-metadata/blob/main/README.md
+license: AGPL-3.0
+
+form:
+  validation: loose
+  fields:
+    enabled:
+      type: toggle
+      label: Plugin aktiv
+      highlight: 1
+      default: 1
+      options:
+        1: PLUGIN_ADMIN.ENABLED
+        0: PLUGIN_ADMIN.DISABLED
+      validate:
+        type: bool
+    show_exif:
+      type: toggle
+      label: EXIF-Daten anzeigen
+      help: Standard für alle Fotoseiten. Eine Seite kann das überschreiben.
+      highlight: 1
+      default: 1
+      options:
+        1: PLUGIN_ADMIN.ENABLED
+        0: PLUGIN_ADMIN.DISABLED
+      validate:
+        type: bool
+    show_gps:
+      type: toggle
+      label: GPS-Position anzeigen
+      help: Standard für alle Fotoseiten. Aus, solange der Aufnahmeort nicht öffentlich sein soll.
+      highlight: 0
+      default: 0
+      options:
+        1: PLUGIN_ADMIN.ENABLED
+        0: PLUGIN_ADMIN.DISABLED
+      validate:
+        type: bool
