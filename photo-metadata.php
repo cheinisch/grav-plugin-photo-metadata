@@ -45,6 +45,7 @@ class PhotoMetadataPlugin extends Plugin
             return;
         }
 
+        $this->grav['assets']->addCss('plugin://photo-metadata/css/photo-metadata.css');
         $this->grav['assets']->addInlineJs($this->buttonScript());
     }
 
@@ -71,7 +72,6 @@ class PhotoMetadataPlugin extends Plugin
             link.className = 'dz-photo-metadata';
             link.title = '{$title}';
             link.href = editorUrl + '?page=' + encodeURIComponent(route) + '#pm-' + encodeURIComponent(name.textContent.trim());
-            link.innerHTML = '<i class="fa fa-camera"></i>';
             anchor.insertAdjacentElement('afterend', link);
         });
     }

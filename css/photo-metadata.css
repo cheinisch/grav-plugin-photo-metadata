@@ -1,0 +1,33 @@
+/*
+ * Button „Foto-Metadaten öffnen“ in den Admin-Medienkarten.
+ * Folgt den Regeln der Dropzone-Buttons im Admin-Theme (dz-insert, dz-view, dz-metadata …),
+ * damit er in derselben Spalte am rechten Kartenrand sitzt.
+ */
+.dz-preview .dz-photo-metadata {
+    display: none;
+    position: absolute;
+    width: 25px;
+    height: 25px;
+    top: 120px;
+    right: -26px;
+    font-size: 0;
+    cursor: pointer;
+}
+
+.dz-preview:hover .dz-photo-metadata {
+    display: block;
+}
+
+.dz-preview .dz-photo-metadata:after {
+    content: '\f030'; /* Kamera */
+    display: block;
+    text-align: center;
+    color: #999;
+    font-family: FontAwesome;
+    font-size: 18px;
+    line-height: 25px;
+}
+
+.dz-preview .dz-photo-metadata:hover:after {
+    color: #fff;
+}
