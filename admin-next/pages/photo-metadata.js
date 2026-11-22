@@ -495,7 +495,7 @@ class PhotoMetadataPage extends HTMLElement {
 
     const d = this.shadowRoot.querySelector('[data-dialog]');
     if (d) d.remove();
-    this.shadowRoot.insertAdjacentHTML('beforeend', `
+    this.shadowRoot.querySelector('.frame').insertAdjacentHTML('beforeend', `
       <div class="ov" data-dialog><div class="dlg">
         <form data-form-el>
           <div class="dhead">
