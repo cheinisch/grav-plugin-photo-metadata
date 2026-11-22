@@ -1,3 +1,10 @@
+# 0.2.6
+
+- Ordner ohne eigene Seite (ancestor_only) nicht als Seite laden
+- Seitenbaum wie im Admin2 lazy laden (API /pages, children_of, search)
+- Seitenliste aus den Seitenordnern lesen
+- Seitenliste ohne root() laden
+
 # 0.2.5
 
 - Seitenliste über den Seitenbaum laden, Detail rechts, Fehler sichtbar
