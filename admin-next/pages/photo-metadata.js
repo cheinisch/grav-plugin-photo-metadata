@@ -1,20 +1,42 @@
 // Admin2-Seite „Foto-Metadaten“. Layout und Farben folgen dem Admin2 (CSS-Variablen von Admin2
 // vererben sich in den Shadow-DOM). Daten: window.__GRAV_API_SERVER_URL + __GRAV_API_PREFIX,
 // Token in window.__GRAV_API_TOKEN, Admin-Basis in window.__GRAV_ADMIN_BASE.
+//
+// Seitenbaum: wie im Admin2 aus der API-Route GET /pages. Die oberste Ebene kommt mit root=true,
+// Unterordner werden beim Öffnen mit children_of=<route> nachgeladen. Suche: search=<text>.
+// Bilder: GET /photo-metadata/images (eigener Endpunkt, nur für die gewählte Seite).
 const TAG = window.__GRAV_PAGE_TAG || 'grav-photo-metadata-page';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[c]));
 
-async function api(path, opts = {}) {
+async function request(path, opts = {}) {
   const base = (window.__GRAV_API_SERVER_URL || '') + (window.__GRAV_API_PREFIX || '/api/v1');
   const headers = { 'X-API-Token': window.__GRAV_API_TOKEN || '' };
   if (opts.body) headers['Content-Type'] = 'application/json';
   const res = await fetch(base + path, { ...opts, headers, credentials: 'same-origin' });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.detail || json.title || `HTTP ${res.status}`);
-  return json.data;
+  return json;
+}
+
+async function api(path, opts = {}) {
+  return (await request(path, opts)).data;
+}
+
+// Blättert alle Seiten einer Abfrage durch (wie Admin2 mit per_page und page).
+async function listPages(params) {
+  const out = [];
+  for (let page = 1; page <= 50; page++) {
+    const qs = new URLSearchParams({ per_page: '100', page: String(page), sort: 'default', order: 'asc', ...params });
+    const json = await request('/pages?' + qs);
+    const data = Array.isArray(json.data) ? json.data : [];
+    out.push(...data);
+    const total = json.meta?.pagination?.total ?? 0;
+    if (!data.length || out.length >= total) break;
+  }
+  return out;
 }
 
 const ICON_FILE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/></svg>';
@@ -40,9 +62,7 @@ const STYLE = `
   .item.sel { background: var(--primary, #3c83f6); color: var(--primary-foreground, #fff); }
   .item .ico { display: inline-flex; opacity: .7; flex: 0 0 auto; }
   .item .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-  .item .r { font-size: 12px; opacity: .75; }
   .item .chev { opacity: .5; display: inline-flex; }
-  .item.dim .t { opacity: .6; }
   .main { padding: 14px; min-width: 0; }
   .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
   .thumb { background: none; border: 2px solid transparent; border-radius: var(--radius, .5rem); padding: 4px; color: inherit; cursor: pointer; text-align: left; }
@@ -65,14 +85,24 @@ const STYLE = `
   .msg { margin-top: 8px; font-size: 13px; min-height: 1em; }
   .msg.err { color: #e5484d; }
   .muted { color: var(--muted-foreground, #71717a); font-size: 13px; }
+  .pad { padding: 8px; margin: 0; }
   .empty { padding: 40px; text-align: center; color: var(--muted-foreground, #71717a); }
+  .empty.err, .pad.err { color: #e5484d; }
 `;
 
 class PhotoMetadataPage extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this.state = { pages: [], filter: '', path: [], route: null, images: [], file: null, draft: '', meta: null, msg: '', err: false };
+    this.state = {
+      roots: null, rootError: null,       // oberste Ebene (null = noch nicht geladen)
+      nodes: new Map(),                   // route -> Knoten, für alle geladenen Seiten
+      results: null,                      // Suchtreffer (null = keine Suche aktiv)
+      filter: '', path: [],               // path = Auswahl je Spalte
+      route: null, images: [], file: null, draft: '', meta: null, msg: '', err: false,
+    };
+    this.searchTimer = null;
+    this.loadToken = 0;
   }
 
   connectedCallback() {
@@ -94,17 +124,15 @@ class PhotoMetadataPage extends HTMLElement {
 
     const root = this.shadowRoot;
     root.querySelector('[data-filter]').addEventListener('input', (e) => {
-      this.state.filter = e.target.value.toLowerCase();
-      this.renderPages();
+      this.state.filter = e.target.value.trim();
+      clearTimeout(this.searchTimer);
+      this.searchTimer = setTimeout(() => this.runSearch(), 300);
     });
     root.querySelector('[data-pages]').addEventListener('click', (e) => {
+      if (e.target.closest('[data-retry]')) return this.loadRoot();
       const b = e.target.closest('[data-route]');
       if (!b) return;
-      const level = Number(b.dataset.level);
-      const route = b.dataset.route;
-      this.state.path = [...this.state.path.slice(0, level), route];
-      const node = this.findNode(route);
-      if (node && node.images) this.selectPage(route); else this.renderPages();
+      this.open(Number(b.dataset.level), b.dataset.route);
     });
     root.querySelector('[data-images]').addEventListener('click', (e) => {
       const b = e.target.closest('[data-file]');
@@ -117,7 +145,20 @@ class PhotoMetadataPage extends HTMLElement {
       if (e.target.matches('[data-save]')) this.save();
     });
 
-    this.loadPages();
+    this.loadRoot();
+  }
+
+  register(p) {
+    const node = {
+      route: p.route,
+      title: p.title || p.route,
+      hasChildren: !!p.has_children,
+      children: null,   // null = noch nicht geladen
+      loading: false,
+      error: null,
+    };
+    this.state.nodes.set(node.route, node);
+    return node;
   }
 
   renderCrumbs() {
@@ -127,75 +168,133 @@ class PhotoMetadataPage extends HTMLElement {
     this.shadowRoot.querySelector('[data-crumbs]').innerHTML = parts.join(` <span style="opacity:.5">${ICON_CHEV}</span> `);
   }
 
-  async loadPages() {
+  async loadRoot() {
+    this.state.roots = null;
+    this.state.rootError = null;
+    this.renderPages();
     try {
-      this.state.pages = await api('/photo-metadata/pages');
-      this.renderPages();
+      this.state.roots = (await listPages({ root: 'true' })).map((p) => this.register(p));
     } catch (e) {
-      this.flash(e.message, true);
+      this.state.rootError = e.message;
+    }
+    this.renderPages();
+  }
+
+  async loadChildren(node) {
+    node.loading = true;
+    node.error = null;
+    this.renderPages();
+    try {
+      node.children = (await listPages({ children_of: node.route })).map((p) => this.register(p));
+    } catch (e) {
+      node.error = e.message;
+    } finally {
+      node.loading = false;
+      this.renderPages();
     }
   }
 
-  buildTree(list) {
-    const nodes = new Map();
-    list.forEach((p) => nodes.set(p.route, { ...p, children: [] }));
-    const roots = [];
-    nodes.forEach((n) => {
-      const parts = n.route.split('/').filter(Boolean);
-      const parent = parts.length > 1 ? nodes.get('/' + parts.slice(0, -1).join('/')) : null;
-      (parent ? parent.children : roots).push(n);
-    });
-    return roots;
+  async runSearch() {
+    const q = this.state.filter;
+    if (!q) {
+      this.state.results = null;
+      return this.renderPages();
+    }
+    this.state.results = null;
+    this.renderPages();
+    try {
+      const found = (await listPages({ search: q })).map((p) => this.register(p));
+      if (q !== this.state.filter) return;   // veraltete Antwort verwerfen
+      this.state.results = found;
+    } catch (e) {
+      if (q !== this.state.filter) return;
+      this.state.results = [];
+      this.flash(e.message, true);
+    }
+    this.renderPages();
   }
 
-  findNode(route) {
-    const walk = (n) => [n, ...n.children.flatMap(walk)];
-    return this.buildTree(this.state.pages).flatMap(walk).find((n) => n.route === route) || null;
+  // Klick auf eine Seite in Spalte `level`: Pfad setzen, Kinder laden, Bilder zeigen.
+  async open(level, route) {
+    this.state.path = [...this.state.path.slice(0, level), route];
+    const node = this.state.nodes.get(route);
+    if (node && node.hasChildren && node.children === null && !node.loading) {
+      this.loadChildren(node);
+    }
+    this.renderPages();
+    this.selectPage(route);
   }
 
   renderPages() {
-    const q = this.state.filter;
-    const tree = this.buildTree(this.state.pages);
+    const s = this.state;
+    const box = this.shadowRoot.querySelector('[data-pages]');
+
+    if (s.roots === null && !s.rootError) {
+      box.innerHTML = '<div class="empty">Lade Seiten…</div>';
+      return;
+    }
+    if (s.rootError) {
+      box.innerHTML = `<div class="empty err">${esc(s.rootError)}<br><br><button class="btn" data-retry>Erneut laden</button></div>`;
+      return;
+    }
+
     const itemHtml = (n, level, onPath) => {
-      const isFolder = n.children.length > 0;
-      const dim = n.images ? '' : ' dim';
       const sel = onPath ? ' sel' : '';
-      const count = n.images ? `<span class="r">${n.images}</span>` : '';
-      const chev = isFolder ? `<span class="chev">${ICON_CHEV}</span>` : '';
-      return `<button class="item${sel}${dim}" data-route="${esc(n.route)}" data-level="${level}" title="${esc(n.route)}">
-        <span class="ico">${isFolder ? ICON_FOLDER : ICON_FILE}</span><span class="t">${esc(n.title)}</span>${count}${chev}</button>`;
+      const chev = n.hasChildren ? `<span class="chev">${ICON_CHEV}</span>` : '';
+      const icon = n.hasChildren ? ICON_FOLDER : ICON_FILE;
+      return `<button class="item${sel}" data-route="${esc(n.route)}" data-level="${level}" title="${esc(n.route)}">
+        <span class="ico">${icon}</span><span class="t">${esc(n.title)}</span>${chev}</button>`;
     };
 
+    const q = s.filter;
     let columns;
     if (q) {
-      const flat = this.state.pages.filter((p) => p.route.toLowerCase().includes(q) || String(p.title).toLowerCase().includes(q));
-      columns = [flat.map((p) => ({ ...p, children: [] }))];
+      if (s.results === null) {
+        columns = [{ message: 'Suche läuft…' }];
+      } else {
+        columns = [{ items: s.results }];
+      }
     } else {
-      columns = [tree];
-      this.state.path.forEach((route) => {
-        const node = this.findNode(route);
-        if (node && node.children.length) columns.push(node.children);
+      columns = [{ items: s.roots }];
+      s.path.forEach((route) => {
+        const node = s.nodes.get(route);
+        if (!node || !node.hasChildren) return;
+        if (node.loading) columns.push({ message: 'Lade…' });
+        else if (node.error) columns.push({ message: node.error, err: true });
+        else if (node.children) columns.push({ items: node.children });
       });
     }
 
-    const html = columns.map((list, level) => `<div class="mcol">${list.map((n) =>
-      itemHtml(n, level, !q && this.state.path[level] === n.route)).join('')}</div>`).join('');
-    this.shadowRoot.querySelector('[data-pages]').innerHTML = `<div class="mcols">${html}</div>`
-      + (columns[0].length ? '' : '<p class="empty">Keine Seiten mit Bildern gefunden.</p>');
+    const html = columns.map((col, level) => {
+      if (col.message) {
+        return `<div class="mcol"><p class="muted pad${col.err ? ' err' : ''}">${esc(col.message)}</p></div>`;
+      }
+      return `<div class="mcol">${col.items.map((n) =>
+        itemHtml(n, level, !q && s.path[level] === n.route)).join('')}</div>`;
+    }).join('');
+
+    const none = !q && s.roots.length === 0 ? '<p class="empty">Keine Seiten gefunden.</p>' : '';
+    box.innerHTML = `<div class="mcols">${html}</div>${none}`;
   }
 
   async selectPage(route) {
+    const token = ++this.loadToken;
     this.state.route = route;
     this.state.file = null;
     this.state.meta = null;
-    this.renderPages();
+    this.state.images = [];
     this.renderCrumbs();
     this.shadowRoot.querySelector('[data-side]').innerHTML = '<div class="empty">Ein Bild wählen, um die Metadaten zu bearbeiten.</div>';
+    const box = this.shadowRoot.querySelector('[data-images]');
+    box.innerHTML = '<div class="empty">Lade Bilder…</div>';
     try {
-      this.state.images = await api('/photo-metadata/images?route=' + encodeURIComponent(route));
+      const images = await api('/photo-metadata/images?route=' + encodeURIComponent(route));
+      if (token !== this.loadToken) return;
+      this.state.images = images;
       this.renderImages();
     } catch (e) {
-      this.flash(e.message, true);
+      if (token !== this.loadToken) return;
+      box.innerHTML = `<div class="empty err">${esc(e.message)}</div>`;
     }
   }
 
@@ -228,7 +327,7 @@ class PhotoMetadataPage extends HTMLElement {
     if (!meta) return;
     const admin = window.__GRAV_ADMIN_BASE || '/admin';
     const editUrl = `${admin}/pages/edit${meta.route}`;
-    const page = this.state.pages.find((p) => p.route === meta.route);
+    const page = this.state.nodes.get(meta.route);
     this.shadowRoot.querySelector('[data-side]').innerHTML = `
       <div class="head">
         <div style="min-width:0"><h2>${esc(page ? page.title : meta.file)}</h2><div class="sub">${esc(meta.route)}</div></div>

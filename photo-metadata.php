@@ -35,7 +35,6 @@ class PhotoMetadataPlugin extends Plugin
 
         $c = PhotoMetadata\PhotoMetadataController::class;
         $routes = $event['routes'];
-        $routes->get('/photo-metadata/pages', [$c, 'pages']);
         $routes->get('/photo-metadata/images', [$c, 'images']);
         $routes->get('/photo-metadata/meta', [$c, 'getMeta']);
         $routes->put('/photo-metadata/meta', [$c, 'putMeta']);

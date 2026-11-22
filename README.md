@@ -14,12 +14,13 @@ Version für Grav 2 mit Admin2. Der klassische Admin wird nicht unterstützt.
 
 ## Admin2-Seite „Foto-Metadaten“
 
-Im Admin2 gibt es in der Sidebar den Punkt **Foto-Metadaten**. Er listet alle Seiten mit Bildern. Nach Auswahl einer Seite siehst du ihre Bilder und kannst die Sidecar-YAML jedes Bildes bearbeiten.
+Im Admin2 gibt es in der Sidebar den Punkt **Foto-Metadaten**. Er zeigt den Seitenbaum wie das Admin2 selbst: Die Seiten kommen aus der API-Route `/pages`, Unterordner werden beim Öffnen nachgeladen. Nach Auswahl einer Seite siehst du ihre Bilder und kannst die Sidecar-YAML jedes Bildes bearbeiten.
 
 - Die YAML liegt als `<bild>.<ext>.meta.yaml` neben dem Bild. Beim Speichern prüft der Server, dass es gültiges YAML mit Schlüsseln ist.
 - Ein leeres Dokument löscht die Sidecar-Datei.
 - Geschrieben wird nur für Bilder, die zur gewählten Seite gehören.
-- Die API hat vier Endpunkte unter `/photo-metadata/…`: `pages`, `images`, `meta` (GET und PUT). Rechte: `api.media.read` zum Lesen, `api.media.write` zum Schreiben.
+- Die Plugin-API hat drei Endpunkte unter `/photo-metadata/…`: `images` (GET) sowie `meta` (GET und PUT). Die Seitenliste kommt von der API-Route `/pages`. Rechte: `api.media.read` zum Lesen, `api.media.write` zum Schreiben.
+- Seiten ohne Bilder erscheinen im Baum ebenfalls. Auf ihnen steht dann „Keine Bilder auf dieser Seite.“
 
 ## Geplante Funktionen
 
