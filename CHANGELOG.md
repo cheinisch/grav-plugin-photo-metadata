@@ -1,3 +1,8 @@
+# 0.2.2
+
+- Grav-Paket mit Laufzeit-Ordnern bauen
+- Revert "Admin2-Seite Foto-Metadaten: Seiten, Bilder und Sidecar-YAML bearbeiten"
+
 # 0.2.1
 
 - Admin2-Seite Foto-Metadaten: Seiten, Bilder und Sidecar-YAML bearbeiten
