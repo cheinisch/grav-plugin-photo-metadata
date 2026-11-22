@@ -8,48 +8,14 @@ use Grav\Common\Plugin;
  *
  * Stellt die Einstellungen für EXIF- und GPS-Anzeige den Templates bereit,
  * auch pro Seite überschreibbar. Nur für Grav 2 mit Admin2.
- *
- * Admin2-Seite: admin-next/pages/photo-metadata.yaml und .js, API: classes/PhotoMetadataController.php.
  */
 class PhotoMetadataPlugin extends Plugin
 {
     public static function getSubscribedEvents(): array
     {
         return [
-            'onTwigSiteVariables'     => ['onTwigSiteVariables', 0],
-            'onApiRegisterRoutes'     => ['onApiRegisterRoutes', 0],
-            'onApiSidebarItems'       => ['onApiSidebarItems', 0],
+            'onTwigSiteVariables' => ['onTwigSiteVariables', 0],
         ];
-    }
-
-    /** API-Routen für die Admin2-Seite. Nur geladen, wenn das API-Plugin aktiv ist. */
-    public function onApiRegisterRoutes(\RocketTheme\Toolbox\Event\Event $event): void
-    {
-        require_once __DIR__ . '/classes/PhotoMetadataController.php';
-
-        $c = PhotoMetadata\PhotoMetadataController::class;
-        $routes = $event['routes'];
-        $routes->get('/photo-metadata/pages', [$c, 'pages']);
-        $routes->get('/photo-metadata/images', [$c, 'images']);
-        $routes->get('/photo-metadata/meta', [$c, 'getMeta']);
-        $routes->put('/photo-metadata/meta', [$c, 'putMeta']);
-    }
-
-    /** Menüeintrag in der Admin2-Sidebar. */
-    public function onApiSidebarItems(\RocketTheme\Toolbox\Event\Event $event): void
-    {
-        $items = $event['items'];
-        $items[] = [
-            'id'        => 'photo-metadata',
-            'plugin'    => 'photo-metadata',
-            'label'     => 'Foto-Metadaten',
-            'icon'      => 'fa-camera',
-            'route'     => '/plugin/photo-metadata',
-            'priority'  => 0,
-            'badge'     => null,
-            'authorize' => 'api.media.read',
-        ];
-        $event['items'] = $items;
     }
 
     public function onTwigSiteVariables(): void
