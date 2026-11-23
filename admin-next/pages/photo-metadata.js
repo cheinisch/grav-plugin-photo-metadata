@@ -116,6 +116,8 @@ const STYLE = `
   .field textarea { min-height: 64px; resize: vertical; }
   .field textarea.mono { font: 12px/1.5 ui-monospace, monospace; min-height: 110px; }
   .dfoot { display: flex; justify-content: flex-end; gap: 8px; }
+  .switches { flex-direction: row; gap: 22px; font-size: 13px; color: var(--foreground, inherit); }
+  .sw { display: flex; align-items: center; gap: 6px; }
   .dhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
   .dbody { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 18px; }
   .dleft { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
@@ -126,10 +128,35 @@ const STYLE = `
 `;
 
 // Felder, die das Formular bearbeitet. Alle anderen Schlüssel stehen im JSON-Feld „Weitere Felder“.
-const FORM_FIELDS = ['alt', 'title', 'caption', 'description', 'author', 'keywords', 'gps', 'exposure', 'iso', 'focalLength', 'software'];
+// [Schlüssel, Beschriftung, Art, breite Spalte]. Art: 'text' oder 'area' (mehrzeilig).
+const FIELD_DEFS = [
+  ['alt', 'Alt-Text', 'text', true],
+  ['title', 'Titel', 'text', true],
+  ['caption', 'Bildunterschrift', 'area'],
+  ['description', 'Beschreibung', 'area'],
+  ['tags', 'Tags (kommagetrennt)', 'text', true],
+  ['author', 'Autor', 'text'],
+  ['copyright', 'Copyright', 'text'],
+  ['camera', 'Kamera', 'text'],
+  ['software', 'Software', 'text'],
+  ['aperture', 'Blende', 'text'],
+  ['exposure', 'Belichtung', 'text'],
+  ['iso', 'ISO', 'text'],
+  ['focalLength', 'Brennweite (mm)', 'text'],
+  ['gps', 'GPS (Breite, Länge)', 'text', true],
+  ['creationdate', 'Aufnahme (Unix-Zeit)', 'text'],
+  ['Orientation', 'Ausrichtung', 'text'],
+  ['ColorSpace', 'Farbraum', 'text'],
+  ['horizontalResolution', 'Auflösung horizontal', 'text'],
+  ['verticalResolution', 'Auflösung vertikal', 'text'],
+];
+const NUMERIC_FIELDS = ['iso', 'focalLength', 'creationdate', 'Orientation', 'ColorSpace', 'horizontalResolution', 'verticalResolution'];
+// Schalter (Checkboxen) im Popup; Standard entspricht den globalen Plugin-Einstellungen.
+const SWITCHES = [['allow_exif', 'EXIF-Daten erlauben', true], ['allow_gps', 'GPS erlauben', false]];
+const FORM_FIELDS = [...FIELD_DEFS.map((d) => d[0]), ...SWITCHES.map((d) => d[0])];
 // Reihenfolge und Beschriftung der aufbereiteten Anzeige.
 const LABELS = [
-  ['title', 'Titel'], ['caption', 'Beschreibung'], ['author', 'Autor'], ['keywords', 'Stichwörter'],
+  ['title', 'Titel'], ['caption', 'Beschreibung'], ['author', 'Autor'], ['keywords', 'Stichwörter'], ['tags', 'Tags'], ['copyright', 'Copyright'], ['camera', 'Kamera'], ['aperture', 'Blende'],
   ['creationdate', 'Aufnahme'], ['exposure', 'Belichtung'], ['iso', 'ISO'], ['focalLength', 'Brennweite'],
   ['software', 'Software'], ['gps', 'GPS'],
 ];
@@ -172,7 +199,7 @@ function formatRows(v) {
     const val = v[k];
     if (val === undefined || val === null || val === '' || (Array.isArray(val) && !val.length)) continue;
     let html;
-    if (k === 'keywords') html = `<span class="chips">${(Array.isArray(val) ? val : [val]).map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</span>`;
+    if (k === 'keywords' || k === 'tags') html = `<span class="chips">${(Array.isArray(val) ? val : [val]).map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</span>`;
     else if (k === 'creationdate') html = esc(fmtDate(val));
     else if (k === 'focalLength') html = esc(`${val} mm`);
     else if (k === 'gps') html = gpsHtml(val);
@@ -482,15 +509,17 @@ class PhotoMetadataPage extends HTMLElement {
     if (!meta) return;
     const v = meta.values || {};
     const info = meta.info || {};
-    const text = (name, label, value = '', wide = false) =>
-      `<label class="field${wide ? ' wide' : ''}"><span>${label}</span><input name="${name}" value="${esc(value)}"></label>`;
-    const area = (name, label, value = '') =>
-      `<label class="field wide"><span>${label}</span><textarea name="${name}">${esc(value)}</textarea></label>`;
-
     const rest = {};
     Object.keys(v).forEach((k) => { if (!FORM_FIELDS.includes(k)) rest[k] = v[k]; });
-    const kw = Array.isArray(v.keywords) ? v.keywords.join(', ') : (v.keywords ?? '');
-    const alt = v.alt || v.title || meta.file;
+    const field = ([key, label, kind, wide]) => {
+      const val = Array.isArray(v[key]) ? v[key].join(', ') : (v[key] ?? '');
+      const cls = `field${wide || kind === 'area' ? ' wide' : ''}`;
+      return kind === 'area'
+        ? `<label class="${cls}"><span>${label}</span><textarea name="${key}">${esc(val)}</textarea></label>`
+        : `<label class="${cls}"><span>${label}</span><input name="${key}" value="${esc(val)}"></label>`;
+    };
+    const sw = ([name, label, def]) =>
+      `<label class="sw"><input type="checkbox" name="${name}"${(v[name] ?? def) ? ' checked' : ''}> ${label}</label>`;
     const dims = info.width && info.height ? `${info.width} × ${info.height}` : '–';
 
     const d = this.shadowRoot.querySelector('[data-dialog]');
@@ -512,20 +541,11 @@ class PhotoMetadataPage extends HTMLElement {
                 <dt>Geändert</dt><dd>${esc(info.modified ? fmtDate(info.modified) : '–')}</dd>
               </dl>
               <button type="button" class="btn" data-copy="${esc(meta.url)}">URL kopieren</button>
-              <button type="button" class="btn" data-copy="![${esc(alt)}](${esc(meta.url)})">Markdown kopieren</button>
+              <button type="button" class="btn" data-copy="![${esc(v.alt || v.title || meta.file)}](${esc(meta.url)})">Markdown kopieren</button>
             </div>
             <div class="grid2">
-              ${text('alt', 'Alt-Text', v.alt ?? '', true)}
-              ${text('title', 'Titel', v.title ?? '', true)}
-              ${area('caption', 'Bildunterschrift', v.caption ?? '')}
-              ${area('description', 'Beschreibung', v.description ?? '')}
-              ${text('keywords', 'Stichwörter (kommagetrennt)', kw, true)}
-              ${text('author', 'Autor', v.author ?? '')}
-              ${text('software', 'Software', v.software ?? '')}
-              ${text('exposure', 'Belichtung', v.exposure ?? '')}
-              ${text('iso', 'ISO', v.iso ?? '')}
-              ${text('focalLength', 'Brennweite (mm)', v.focalLength ?? '')}
-              ${text('gps', 'GPS (Breite, Länge)', v.gps ?? '', true)}
+              ${FIELD_DEFS.map(field).join('')}
+              <div class="field wide switches">${SWITCHES.map(sw).join('')}</div>
             </div>
           </div>
           <details>
@@ -549,30 +569,25 @@ class PhotoMetadataPage extends HTMLElement {
 
   async saveForm(dlg) {
     const f = dlg.querySelector('form');
-    const get = (n) => String(f.elements[n].value ?? '').trim();
+    const el = (n) => f.elements[n];
     const dmsg = dlg.querySelector('[data-dmsg]');
     let out;
     try {
-      out = JSON.parse(get('rest') || '{}');
+      out = JSON.parse(el('rest').value || '{}');
       if (!out || typeof out !== 'object' || Array.isArray(out)) throw new Error('nicht-objekt');
     } catch (e) {
       dmsg.textContent = 'Die weiteren Felder müssen ein JSON-Objekt sein.';
       return;
     }
-    const set = (k, val) => { if (val !== '') out[k] = val; };
-    set('title', get('title'));
-    set('alt', get('alt'));
-    set('caption', get('caption'));
-    set('description', get('description'));
-    set('author', get('author'));
-    set('gps', get('gps'));
-    set('exposure', get('exposure'));
-    set('software', get('software'));
-    const kw = get('keywords').split(',').map((x) => x.trim()).filter(Boolean);
-    if (kw.length) out.keywords = kw;
-    const num = (s) => (/^-?\d+(\.\d+)?$/.test(s) ? Number(s) : s);
-    if (get('iso')) out.iso = num(get('iso'));
-    if (get('focalLength')) out.focalLength = num(get('focalLength'));
+    // Leere Felder werden nicht gespeichert, also aus der Datei entfernt.
+    for (const [key] of FIELD_DEFS) {
+      const raw = String(el(key).value ?? '').trim();
+      if (raw === '') continue;
+      if (key === 'tags') out.tags = raw.split(',').map((x) => x.trim()).filter(Boolean);
+      else if (NUMERIC_FIELDS.includes(key)) out[key] = /^-?\d+(\.\d+)?$/.test(raw) ? Number(raw) : raw;
+      else out[key] = raw;
+    }
+    for (const [name] of SWITCHES) out[name] = el(name).checked;
 
     const yaml = Object.keys(out).length ? toYaml(out) : '';
     try {
