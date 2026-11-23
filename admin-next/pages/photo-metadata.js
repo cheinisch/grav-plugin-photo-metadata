@@ -118,6 +118,12 @@ const STYLE = `
   .dfoot { display: flex; justify-content: flex-end; gap: 8px; }
   .switches { flex-direction: row; gap: 22px; font-size: 13px; color: var(--foreground, inherit); }
   .sw { display: flex; align-items: center; gap: 6px; }
+  .tagbox { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border: 1px solid var(--input, #e4e4e7);
+    border-radius: var(--radius-sm, 6px); padding: 5px 6px; min-height: 36px; box-sizing: border-box; }
+  .tagchip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border, #e4e4e7);
+    border-radius: 4px; padding: 1px 6px; font-size: 12px; color: var(--foreground, inherit); }
+  .tagchip button { background: none; border: 0; color: inherit; cursor: pointer; padding: 0 2px; font-size: 13px; line-height: 1; }
+  .taginput { flex: 1; min-width: 120px; border: 0; outline: 0; background: transparent; color: inherit; font: 13px system-ui, sans-serif; padding: 3px; }
   .dhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
   .dbody { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 18px; }
   .dleft { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
@@ -518,6 +524,13 @@ class PhotoMetadataPage extends HTMLElement {
         ? `<label class="${cls}"><span>${label}</span><textarea name="${key}">${esc(val)}</textarea></label>`
         : `<label class="${cls}"><span>${label}</span><input name="${key}" value="${esc(val)}"></label>`;
     };
+    const tagList = Array.isArray(v.tags)
+      ? v.tags.map(String)
+      : String(v.tags ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+    const chip = (t) => `<span class="tagchip">${esc(t)}<button type="button" data-rmtag="${esc(t)}" aria-label="Entfernen">×</button></span>`;
+    const tagField = (list) => `<div class="field wide"><span>Tags</span>
+        <div class="tagbox" data-tagbox>${list.map(chip).join('')}<input class="taginput" data-taginput placeholder="Tag hinzufügen…"></div>
+        <input type="hidden" name="tags" value="${esc(list.join(', '))}"></div>`;
     const sw = ([name, label, def]) =>
       `<label class="sw"><input type="checkbox" name="${name}"${(v[name] ?? def) ? ' checked' : ''}> ${label}</label>`;
     const dims = info.width && info.height ? `${info.width} × ${info.height}` : '–';
@@ -544,7 +557,7 @@ class PhotoMetadataPage extends HTMLElement {
               <button type="button" class="btn" data-copy="![${esc(v.alt || v.title || meta.file)}](${esc(meta.url)})">Markdown kopieren</button>
             </div>
             <div class="grid2">
-              ${FIELD_DEFS.map(field).join('')}
+              ${FIELD_DEFS.map((d) => (d[0] === 'tags' ? tagField(tagList) : field(d))).join('')}
               <div class="field wide switches">${SWITCHES.map(sw).join('')}</div>
             </div>
           </div>
@@ -562,9 +575,40 @@ class PhotoMetadataPage extends HTMLElement {
     const dlg = this.shadowRoot.querySelector('[data-dialog]');
     dlg.querySelector('[data-cancel]').addEventListener('click', () => dlg.remove());
     dlg.querySelector('[data-dsave]').addEventListener('click', () => this.saveForm(dlg));
+    this.bindTags(dlg);
     dlg.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => {
       navigator.clipboard?.writeText(b.dataset.copy).then(() => this.flash('Kopiert.', false), () => this.flash('Kopieren nicht möglich.', true));
     }));
+  }
+
+  // Chip-Eingabe für Tags: Enter oder Komma fügt hinzu, × entfernt, Verlassen des Feldes fügt hinzu.
+  bindTags(dlg) {
+    const box = dlg.querySelector('[data-tagbox]');
+    const hidden = dlg.querySelector('input[name="tags"]');
+    const list = () => hidden.value.split(',').map((x) => x.trim()).filter(Boolean);
+    const setList = (items) => {
+      hidden.value = items.join(', ');
+      box.querySelectorAll('.tagchip').forEach((c) => c.remove());
+      const input = box.querySelector('[data-taginput]');
+      input.insertAdjacentHTML('beforebegin', items.map((t) => `<span class="tagchip">${esc(t)}<button type="button" data-rmtag="${esc(t)}" aria-label="Entfernen">×</button></span>`).join(''));
+    };
+    const addPending = () => {
+      const input = box.querySelector('[data-taginput]');
+      const t = input.value.trim();
+      input.value = '';
+      if (t && !list().includes(t)) setList([...list(), t]);
+    };
+    box.addEventListener('click', (e) => {
+      const rm = e.target.closest('[data-rmtag]');
+      if (rm) setList(list().filter((t) => t !== rm.dataset.rmtag));
+      else box.querySelector('[data-taginput]').focus();
+    });
+    const input = box.querySelector('[data-taginput]');
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addPending(); }
+      else if (e.key === 'Backspace' && !input.value) setList(list().slice(0, -1));
+    });
+    input.addEventListener('blur', addPending);
   }
 
   async saveForm(dlg) {
