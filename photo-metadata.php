@@ -3,6 +3,19 @@ namespace Grav\Plugin;
 
 use Grav\Common\Plugin;
 
+// Lädt Klassen aus classes/ bei Bedarf. Nötig, weil die API Routen auch aus ihrem Cache nutzt
+// und dann onApiRegisterRoutes() nicht läuft, die Controller-Klasse also nicht geladen wäre.
+spl_autoload_register(static function (string $class): void {
+    $prefix = 'Grav\\Plugin\\PhotoMetadata\\';
+    if (strncmp($class, $prefix, strlen($prefix)) !== 0) {
+        return;
+    }
+    $file = __DIR__ . '/classes/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+    if (is_file($file)) {
+        require_once $file;
+    }
+});
+
 /**
  * Photo Metadata
  *
