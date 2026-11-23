@@ -150,6 +150,7 @@ const FIELD_DEFS = [
   ['iso', 'ISO', 'text'],
   ['focalLength', 'Brennweite (mm)', 'text'],
   ['gps', 'GPS (Breite, Länge)', 'text', true],
+  ['location_name', 'Ortsname', 'text', true],
   ['creationdate', 'Aufnahme (Unix-Zeit)', 'text'],
   ['Orientation', 'Ausrichtung', 'text'],
   ['ColorSpace', 'Farbraum', 'text'],
@@ -164,7 +165,7 @@ const FORM_FIELDS = [...FIELD_DEFS.map((d) => d[0]), ...SWITCHES.map((d) => d[0]
 const LABELS = [
   ['title', 'Titel'], ['caption', 'Beschreibung'], ['author', 'Autor'], ['keywords', 'Stichwörter'], ['tags', 'Tags'], ['copyright', 'Copyright'], ['camera', 'Kamera'], ['aperture', 'Blende'],
   ['creationdate', 'Aufnahme'], ['exposure', 'Belichtung'], ['iso', 'ISO'], ['focalLength', 'Brennweite'],
-  ['software', 'Software'], ['gps', 'GPS'],
+  ['software', 'Software'], ['gps', 'GPS'], ['location_name', 'Ort'],
 ];
 const KEY_RE = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
